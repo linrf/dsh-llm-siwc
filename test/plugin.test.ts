@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { convertMessages, convertTools } from '../src/convert.ts'
 import { parseSseStream } from '../src/sse.ts'
 import { SiwcResponsesAdapter } from '../src/adapter.ts'
+import { ModelCatalog, FALLBACK_CATALOG, orderLevels } from '../src/catalog.ts'
 
 // ---------- message conversion ----------
 
@@ -470,4 +471,114 @@ test('resolved model metadata advertises reasoning, context, and max tokens', as
   assert.deepEqual(info.inputModalities, ['text', 'image'])
   assert.ok((info.reasoning?.efforts.length ?? 0) > 0)
   assert.equal(info.reasoning?.defaultEffort, 'high')
+})
+
+// ---------- live model catalog ----------
+
+/** One entry in the shape the route actually returns. */
+const liveEntry = (slug: string, extra: Record<string, unknown> = {}) => ({
+  slug,
+  display_name: slug === 'gpt-6-luna' ? 'GPT-6-Luna' : slug,
+  description: `${slug} description`,
+  context_window: 272000,
+  max_context_window: 872000,
+  input_modalities: ['text', 'image'],
+  default_reasoning_level: 'low',
+  supported_reasoning_levels: [{ effort: 'low' }, { effort: 'xhigh' }, { effort: 'ultra' }],
+  ...extra,
+})
+
+const catalogWith = (models: unknown[], opts: Record<string, unknown> = {}) =>
+  new ModelCatalog({
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async () =>
+      new Response(JSON.stringify({ models }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })) as unknown as typeof fetch,
+    ...opts,
+  })
+
+test('the catalog reads the route\'s real fields, not a hardcoded list', async () => {
+  const catalog = catalogWith([liveEntry('gpt-6-luna')])
+  const models = await catalog.load()
+  assert.equal(models.length, 1)
+  const [model] = models
+  assert.equal(model?.slug, 'gpt-6-luna')
+  assert.equal(model?.displayName, 'GPT-6-Luna')
+  assert.equal(model?.description, 'gpt-6-luna description')
+  assert.equal(model?.contextWindow, 272000)
+  assert.equal(model?.maxContextWindow, 872000)
+  assert.deepEqual(model?.inputModalities, ['text', 'image'])
+})
+
+test('per-model reasoning levels survive, including xhigh/max/ultra', async () => {
+  const catalog = catalogWith([liveEntry('gpt-6-luna')])
+  const [model] = await catalog.load()
+  // The route lists these; a shared hardcoded set would drop them.
+  assert.deepEqual(model?.reasoningLevels, ['low', 'xhigh', 'ultra'])
+  // Reordered into the route's natural progression.
+  assert.deepEqual(orderLevels(['ultra', 'low', 'high', 'max']), ['low', 'high', 'max', 'ultra'])
+})
+
+test('resolveModel publishes exactly the levels that model accepts', async () => {
+  const catalog = catalogWith([
+    liveEntry('gpt-6.1-sol'),
+    liveEntry('gpt-5.5', { supported_reasoning_levels: [{ effort: 'low' }, { effort: 'xhigh' }] }),
+  ])
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: [],
+    resolveAccessToken: async () => 'token',
+    catalog,
+  })
+  const wide = await adapter.resolveModel('chatgpt', 'gpt-6.1-sol')
+  assert.deepEqual(wide.reasoning?.efforts.map((e) => e.id), ['low', 'xhigh', 'ultra'])
+  const narrow = await adapter.resolveModel('chatgpt', 'gpt-5.5')
+  assert.deepEqual(narrow.reasoning?.efforts.map((e) => e.id), ['low', 'xhigh'])
+  // A model the route does not serve must not inherit another model's levels.
+  assert.equal(narrow.name, 'gpt-5.5')
+})
+
+test('listModels advertises the live catalog with display names', async () => {
+  const catalog = catalogWith([liveEntry('gpt-6-luna'), liveEntry('gpt-reserve')])
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: [],
+    resolveAccessToken: async () => 'token',
+    catalog,
+  })
+  const models = await adapter.listModels('chatgpt')
+  assert.deepEqual(models.map((m) => m.id), ['gpt-6-luna', 'gpt-reserve'])
+  assert.equal(models[0]?.provider, 'chatgpt')
+  assert.equal(models[0]?.name, 'GPT-6-Luna')
+  assert.deepEqual(models[0]?.inputModalities, ['text', 'image'])
+})
+
+test('a catalog read failure keeps the picker usable instead of emptying it', async () => {
+  const catalog = new ModelCatalog({
+    resolveAccessToken: async () => {
+      throw new Error('no credential')
+    },
+    seed: FALLBACK_CATALOG,
+  })
+  const models = await catalog.load()
+  assert.equal(models.length, FALLBACK_CATALOG.length)
+  // The seed is deliberately conservative: text+image and common levels only.
+  assert.deepEqual(catalog.snapshot()[0]?.reasoningLevels, ['low', 'medium', 'high'])
+})
+
+test('a stale catalog is not refetched while its TTL holds', async () => {
+  let calls = 0
+  const catalog = new ModelCatalog({
+    resolveAccessToken: async () => 'token',
+    ttlMs: 60_000,
+    fetchImpl: (async () => {
+      calls += 1
+      return new Response(JSON.stringify({ models: [liveEntry('gpt-6-luna')] }), { status: 200 })
+    }) as unknown as typeof fetch,
+  })
+  await catalog.load()
+  await catalog.load()
+  assert.equal(calls, 1)
 })

@@ -16,6 +16,7 @@
 import { convertMessages, convertTools, type HarnessMessage } from './convert.ts'
 import { streamResponses, ResponsesHttpError, type ResponsesEvent } from './client.ts'
 import { classifyError, type ClassifiedError } from './errors.ts'
+import { reasoningEffort } from './catalog.ts'
 
 /** Structural view of the harness stream chunk vocabulary. */
 export type StreamChunk =
@@ -61,10 +62,37 @@ export interface AdapterOptions {
   /** Override for tests / self-hosted gateways. */
   baseUrl?: string
   fetchImpl?: typeof fetch
-  /** Context window advertised for every model on this route. */
+  /** Context window advertised when the catalog has no entry for a model. */
   contextWindow?: number
   /** Default output cap advertised for every model on this route. */
   maxTokens?: number
+  /**
+   * Live model catalog.
+   *
+   * When present, `listModels` and `resolveModel` report what the route
+   * actually serves — including per-model reasoning levels. When absent the
+   * static seed is used, which is intentionally conservative.
+   */
+  catalog?: ModelCatalogLike
+}
+
+/** The slice of the catalog the adapter needs. */
+export interface ModelCatalogLike {
+  load(signal?: AbortSignal): Promise<readonly CatalogModelLike[]>
+  snapshot(): readonly CatalogModelLike[]
+  find(slug: string): CatalogModelLike | undefined
+}
+
+/** One model as the catalog describes it. */
+export interface CatalogModelLike {
+  slug: string
+  displayName: string
+  description?: string
+  contextWindow: number
+  maxContextWindow?: number
+  inputModalities: readonly string[]
+  reasoningLevels: readonly string[]
+  defaultReasoningLevel?: string
 }
 
 /** Context window shared by the current ChatGPT-plan models. */
@@ -160,21 +188,23 @@ export class SiwcResponsesAdapter {
   /**
    * Advertised models for one route.
    *
-   * `provider` is a REQUIRED field of `LlmModelInfo`; omitting it makes the
-   * model directory reject the whole catalog with
+   * Reads the live catalog, so models the account can actually use are listed
+   * with their real labels. `provider` is a REQUIRED field of `LlmModelInfo`;
+   * omitting it makes the model directory reject the whole catalog with
    * "adapter returned invalid or duplicate model metadata".
    */
-  listModels(provider: string): readonly {
-    provider: string
-    id: string
-    name: string
-    inputModalities: readonly string[]
-  }[] {
-    return this.#options.models.map((id) => ({
+  async listModels(provider: string): Promise<
+    readonly { provider: string; id: string; name: string; inputModalities: readonly string[] }[]
+  > {
+    const models =
+      this.#options.catalog === undefined
+        ? this.#seedModels()
+        : await this.#options.catalog.load()
+    return models.map((model) => ({
       provider,
-      id,
-      name: id,
-      inputModalities: ['text', 'image'],
+      id: model.slug,
+      name: model.displayName,
+      inputModalities: [...model.inputModalities],
     }))
   }
 
@@ -182,23 +212,47 @@ export class SiwcResponsesAdapter {
    * Full metadata for one model.
    *
    * Returning only `{provider, id, name}` leaves the session without a context
-   * window, an output cap, or any reasoning-effort choice, so the model picker
-   * offers no thinking control even though every model on this route supports
-   * one.
+   * window, an output cap, or any reasoning-effort choice. The reasoning levels
+   * are per model: publishing one shared list both hides levels a model accepts
+   * and offers levels it rejects.
    */
   async resolveModel(provider: string, model: string): Promise<ResolvedModelLike> {
+    // Await the catalog so the first call after startup already reports the
+    // route's real metadata; the TTL makes later calls free.
+    const catalog = this.#options.catalog
+    const models =
+      catalog === undefined ? this.#seedModels() : await catalog.load()
+    const entry = models.find((candidate) => candidate.slug === model)
+    const levels = entry?.reasoningLevels ?? []
     return {
       provider,
       id: model,
-      name: model,
-      inputModalities: ['text', 'image'],
-      context: { contextWindow: this.#options.contextWindow ?? DEFAULT_CONTEXT_WINDOW },
-      defaultMaxTokens: this.#options.maxTokens ?? DEFAULT_MAX_TOKENS,
-      reasoning: {
-        efforts: REASONING_EFFORTS,
-        defaultEffort: 'high',
+      name: entry?.displayName ?? model,
+      inputModalities: entry === undefined ? ['text', 'image'] : [...entry.inputModalities],
+      context: {
+        contextWindow:
+          entry?.contextWindow ?? this.#options.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
       },
+      defaultMaxTokens: this.#options.maxTokens ?? DEFAULT_MAX_TOKENS,
+      reasoning:
+        levels.length === 0
+          ? { efforts: REASONING_EFFORTS, defaultEffort: 'high' }
+          : {
+              efforts: levels.map(reasoningEffort),
+              defaultEffort: entry?.defaultReasoningLevel ?? levels.at(-1),
+            },
     }
+  }
+
+  /** Static models used when no live catalog is configured. */
+  #seedModels(): readonly CatalogModelLike[] {
+    return this.#options.models.map((slug) => ({
+      slug,
+      displayName: slug,
+      contextWindow: this.#options.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+      inputModalities: ['text', 'image'],
+      reasoningLevels: [],
+    }))
   }
 
   /**

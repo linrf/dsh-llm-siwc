@@ -35,6 +35,7 @@ import {
   signOut as signOutCredential,
 } from './authorization.ts'
 import { FileCredentialStore, type CredentialStore } from './store.ts'
+import { ModelCatalog, FALLBACK_CATALOG } from './catalog.ts'
 import { loadOrCreateHostId } from './host-id.ts'
 import { resolveConfig, type SiwcConfig } from './config.ts'
 import { PLAN_USAGE_SCOPE } from './config.ts'
@@ -133,7 +134,7 @@ class HarnessSiwcAdapter extends LlmAdapter {
   override listModels(provider: string): Promise<
     readonly { provider: string; id: string; name: string; inputModalities: readonly string[] }[]
   > {
-    return Promise.resolve(this.#core.listModels(provider))
+    return this.#core.listModels(provider)
   }
 
   override resolveModel(provider: string, model: string): Promise<ResolvedModelLike> {
@@ -166,24 +167,41 @@ export function apply(ctx: Context, config: Config): void {
   // Every registration below is failure-isolated: a plugin must never take the
   // host composition down with it. A throw here would abort this fiber and can
   // cascade into unrelated rows (agent presets, tools) failing to start.
+  // Token resolution is shared by the adapter and the model catalog.
+  const resolveAccessToken = async (provider: string): Promise<string> => {
+    const credential = await pickCredential(store, provider)
+    if (!credential) {
+      throw new Error(
+        `no ChatGPT credential for provider "${provider}"; sign in with ChatGPT first`,
+      )
+    }
+    if (!planUsageEnabled(credential)) {
+      throw new Error(
+        'the stored ChatGPT credential lacks the chatgpt.tokens.use.direct scope; reauthorize with the full scope set',
+      )
+    }
+    const fresh = await ensureFreshCredential(credential.clientId, { store, config: settings })
+    return fresh.accessToken
+  }
+
+  // The route publishes its real catalog at GET /v1/models; hardcoding it hides
+  // models the account can use and advertises reasoning levels it rejects.
+  const catalog = new ModelCatalog({
+    resolveAccessToken: () => resolveAccessToken(config.provider),
+    seed: FALLBACK_CATALOG,
+    onError: (error) => console.error('llm-siwc: could not read the model catalog:', error),
+  })
+  // Warm the catalog so the first model pick already shows the live list. A
+  // failure here is reported by onError and changes nothing else.
+  void catalog.load().then((models) => {
+    console.log(`llm-siwc: model catalog ready (${models.length} models)`)
+  })
+
   const core = new SiwcResponsesAdapter({
     providers: [config.provider],
     models: config.models,
-    resolveAccessToken: async (provider) => {
-      const credential = await pickCredential(store, provider)
-      if (!credential) {
-        throw new Error(
-          `no ChatGPT credential for provider "${provider}"; sign in with ChatGPT first`,
-        )
-      }
-      if (!planUsageEnabled(credential)) {
-        throw new Error(
-          'the stored ChatGPT credential lacks the chatgpt.tokens.use.direct scope; reauthorize with the full scope set',
-        )
-      }
-      const fresh = await ensureFreshCredential(credential.clientId, { store, config: settings })
-      return fresh.accessToken
-    },
+    resolveAccessToken,
+    catalog,
     // Image bytes are never in the session log, so each referenced attachment
     // is read here and handed to the wire as a data URL.
     resolveImage: async (attachment, signal) => {
@@ -232,6 +250,29 @@ export function apply(ctx: Context, config: Config): void {
     console.log(`llm-siwc: provider directory entry registered (settingsNs=${settingsNs})`)
   } catch (error) {
     console.error('llm-siwc: could not register the provider directory entry:', error)
+  }
+
+  // Let the "add a provider" flow pull this route's catalog. The request may
+  // carry a typed API key, but this route authenticates with the stored OAuth
+  // credential, so discovery reads the catalog the same way the adapter does.
+  try {
+    const settingsNs =
+      (ctx as { fiber?: { entry?: { options?: { id?: string } } } }).fiber?.entry?.options?.id ??
+      'llm-siwc'
+    ctx.llm.registerModelDiscovery(settingsNs, async (request, signal) => {
+      const models = await catalog.load(signal)
+      const provider = request.provider ?? config.provider
+      return models.map((model) => ({
+        provider,
+        id: model.slug,
+        name: model.displayName,
+        ...(model.description === undefined ? {} : { description: model.description }),
+        inputModalities: [...model.inputModalities],
+      }))
+    })
+    console.log('llm-siwc: model discovery registered')
+  } catch (error) {
+    console.error('llm-siwc: could not register model discovery:', error)
   }
 
   // ---- 2. sign-in flow ----
