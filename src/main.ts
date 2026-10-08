@@ -188,6 +188,26 @@ export function apply(ctx: Context, config: Config): void {
     return
   }
 
+  // Advertise the route in the GUI's provider directory so Models settings
+  // shows a ChatGPT row. The settings namespace is this row's own id, which is
+  // what pi-ai does — no separate settings registration is needed.
+  try {
+    const settingsNs =
+      (ctx as { fiber?: { entry?: { options?: { id?: string } } } }).fiber?.entry?.options?.id ??
+      'llm-siwc'
+    ctx.llm.registerConfigurableProviders([
+      {
+        provider: config.provider,
+        displayName: 'ChatGPT',
+        settingsNs,
+        settingsPath: ['providers', config.provider],
+      },
+    ])
+    console.log(`llm-siwc: provider directory entry registered (settingsNs=${settingsNs})`)
+  } catch (error) {
+    console.error('llm-siwc: could not register the provider directory entry:', error)
+  }
+
   // ---- 2. sign-in flow ----
   const authorization = ctx.authorization
   if (authorization === undefined) {
