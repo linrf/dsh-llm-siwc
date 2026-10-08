@@ -18,6 +18,7 @@ import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { credentialKey, type CredentialKey } from '@deepseek-ai/dsh-credentials'
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import { join } from 'node:path'
 
 import {
@@ -25,10 +26,16 @@ import {
   type GenerateOptionsLike,
   type StreamChunk,
 } from './adapter.ts'
-import { authorize, ensureFreshCredential, planUsageEnabled } from './authorization.ts'
+import {
+  authorize,
+  ensureFreshCredential,
+  planUsageEnabled,
+  signOut as signOutCredential,
+} from './authorization.ts'
 import { FileCredentialStore, type CredentialStore } from './store.ts'
 import { loadOrCreateHostId } from './host-id.ts'
 import { resolveConfig, type SiwcConfig } from './config.ts'
+import { PLAN_USAGE_SCOPE } from './config.ts'
 import type { SiwcCredential } from './types.ts'
 
 export const name = 'llm-siwc'
@@ -41,7 +48,7 @@ export const name = 'llm-siwc'
  * is taken as two services literally named `required` and `optional`. Neither
  * ever exists, so the plugin stays pending forever and `apply()` never runs.
  */
-export const inject = ['llm', 'authorization']
+export const inject = ['llm', 'authorization', 'commands']
 
 export const Config = z.object({
   /** Provider route name requests select with `GenerateOptions.provider`. */
@@ -200,6 +207,138 @@ export function apply(ctx: Context, config: Config): void {
     console.log('llm-siwc: apply() completed — sign-in flow registered')
   } catch (error) {
     console.error('llm-siwc: could not register the sign-in flow:', error)
+  }
+
+  // ---- 3. GUI command surface ----
+  //
+  // The web GUI has no generic authorization entry point, and adding one would
+  // need a typert-generated Remote (the Electron client talks over an IPC
+  // bridge, not HTTP). A slash command needs neither: the existing
+  // `remote.commands.execute` path already reaches the host, so `/chatgpt`
+  // becomes the GUI entry for sign-in, status, and sign-out.
+  try {
+    ctx.commands.register({
+      definitionId: CommandDefinitionId('@deepseek-ai/dsh-llm-siwc'),
+      name: 'chatgpt',
+      description: 'Sign in to ChatGPT, show the signed-in account, or sign out',
+      input: { hint: '[login|status|logout]' },
+      handler: (invocation) =>
+        runChatgptCommand(invocation, {
+          store,
+          settings,
+          signIn: () => authorize({}, { store, config: settings }),
+          signOut: (clientId) => signOutCredential(clientId, { store, config: settings }),
+        }),
+    })
+    console.log('llm-siwc: /chatgpt command registered')
+  } catch (error) {
+    console.error('llm-siwc: could not register the /chatgpt command:', error)
+  }
+}
+
+/** Shape a command handler receives; only the fields this command reads. */
+export interface CommandInvocationLike {
+  readonly rawInput?: string
+}
+
+/** Shape a command handler returns. */
+type CommandResultLike =
+  | { kind: 'success'; text?: string }
+  | { kind: 'error'; text: string }
+
+interface CommandDeps {
+  store: CredentialStore
+  settings: SiwcConfig
+  signIn: () => Promise<{ credential: SiwcCredential; planUsageEnabled: boolean }>
+  signOut: (clientId: string) => Promise<void>
+}
+
+/** Guards against overlapping sign-in attempts from repeated commands. */
+let signInInFlight = false
+
+/**
+ * Implement `/chatgpt [login|status|logout]`.
+ *
+ * Sign-in runs in the background: `authorize()` blocks on a browser round trip,
+ * so the command reports immediately and the account appears on the next
+ * `/chatgpt status`.
+ */
+async function runChatgptCommand(
+  invocation: CommandInvocationLike,
+  deps: CommandDeps,
+): Promise<CommandResultLike> {
+  const argument = String(invocation.rawInput ?? '').trim().toLowerCase()
+
+  if (argument === '' || argument === 'status') {
+    const records = await deps.store.list()
+    if (records.length === 0) {
+      return {
+        kind: 'success',
+        text: 'No ChatGPT account is signed in.\n\nRun /chatgpt login to authorize this installation.',
+      }
+    }
+    const blocks = records.map((record) => {
+      const expires = new Date(record.expiresAt)
+      const expired = expires.getTime() < Date.now()
+      return [
+        `Account    : ${record.email ?? record.subject}`,
+        `Client id  : ${record.clientId}`,
+        `Plan usage : ${record.scopes.includes(PLAN_USAGE_SCOPE) ? 'enabled' : 'NOT granted'}`,
+        `Access     : ${expires.toISOString()}${expired ? ' (expired; renewed on next use)' : ''}`,
+      ].join('\n')
+    })
+    return {
+      kind: 'success',
+      text: `ChatGPT — ${records.length} account${records.length === 1 ? '' : 's'}\n\n${blocks.join('\n\n')}`,
+    }
+  }
+
+  if (argument === 'login') {
+    if (signInInFlight) {
+      return {
+        kind: 'error',
+        text: 'A sign-in is already in progress. Finish it in the browser window that opened.',
+      }
+    }
+    signInInFlight = true
+    void deps
+      .signIn()
+      .then((result) => {
+        console.log(`llm-siwc: signed in as ${result.credential.email ?? result.credential.subject}`)
+      })
+      .catch((error: unknown) => {
+        console.error('llm-siwc: sign-in failed:', error)
+      })
+      .finally(() => {
+        signInInFlight = false
+      })
+    return {
+      kind: 'success',
+      text:
+        'Opening your browser…\n\n' +
+        'Authorize "DeepSeek Harness" there, then run /chatgpt status to confirm the account.',
+    }
+  }
+
+  if (argument === 'logout') {
+    const records = await deps.store.list()
+    if (records.length === 0) return { kind: 'success', text: 'Nothing to sign out.' }
+    const lines: string[] = []
+    for (const record of records) {
+      const label = record.email ?? record.clientId
+      try {
+        await deps.signOut(record.clientId)
+        lines.push(`signed out: ${label}`)
+      } catch (error) {
+        lines.push(`signed out locally, remote revocation unconfirmed: ${label} — ${String(error)}`)
+      }
+    }
+    return { kind: 'success', text: lines.join('\n') }
+  }
+
+  return {
+    kind: 'error',
+    text: `Unknown argument "${argument}". Usage: /chatgpt [login|status|logout]`,
   }
 }
 

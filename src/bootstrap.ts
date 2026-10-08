@@ -42,6 +42,7 @@ const PEER_PACKAGES = new Set([
   '@deepseek-ai/dsh-llm',
   '@deepseek-ai/dsh-credentials',
   '@deepseek-ai/dsh-authorization',
+  '@deepseek-ai/dsh-commands',
   '@deepseek-ai/schemastery',
 ])
 

@@ -21,6 +21,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=0.2.0-rc.2 <0.3.0",
     "@deepseek-ai/dsh-authorization": ">=0.2.0-rc.2 <0.3.0",
+    "@deepseek-ai/dsh-commands": ">=0.2.0-rc.2 <0.3.0",
     "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <0.3.0",
     "@deepseek-ai/dsh-llm": ">=0.2.0-rc.2 <0.3.0",
     "@deepseek-ai/schemastery": ">=0.2.0-rc.2 <0.3.0"
