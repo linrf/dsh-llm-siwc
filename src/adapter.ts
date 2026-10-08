@@ -226,6 +226,7 @@ export class SiwcResponsesAdapter {
         instructions: converted.instructions,
         input: converted.input,
         tools,
+        reasoningEffort: options.reasoningEffort,
         signal: options.signal,
       },
       { baseUrl: this.#options.baseUrl, fetchImpl: this.#options.fetchImpl },

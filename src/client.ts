@@ -19,6 +19,13 @@ export interface ResponsesRequest {
   instructions?: string
   input: unknown[]
   tools?: unknown[]
+  /**
+   * Reasoning effort for this call, if the route advertised any.
+   *
+   * `off` is sent as no `reasoning` field at all rather than `effort: "none"`,
+   * so a route that rejects the field is unaffected by the default.
+   */
+  reasoningEffort?: string
   signal?: AbortSignal
 }
 
@@ -55,6 +62,11 @@ function requestBody(request: ResponsesRequest): Record<string, unknown> {
   }
   if (request.tools !== undefined && request.tools.length > 0) {
     body.tools = request.tools
+  }
+  // `off` means "do not reason": omit the field entirely rather than sending
+  // an effort value the route may not accept.
+  if (request.reasoningEffort !== undefined && request.reasoningEffort !== 'off') {
+    body.reasoning = { effort: request.reasoningEffort }
   }
   // Defensive: nothing the route rejects may reach the wire.
   return stripUnsupportedFields(body)

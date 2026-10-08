@@ -398,3 +398,76 @@ test('an unresolved image block degrades to a placeholder, not a dropped turn', 
     content: [{ type: 'input_text', text: '[image unavailable]' }],
   })
 })
+
+test('the selected reasoning effort reaches the request body', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+    reasoningEffort: 'high',
+  })) { /* drain */ }
+
+  assert.deepEqual(captured?.reasoning, { effort: 'high' })
+})
+
+test('reasoning effort "off" omits the field entirely', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+    reasoningEffort: 'off',
+  })) { /* drain */ }
+
+  assert.equal(captured?.reasoning, undefined)
+})
+
+test('the route refuses to retry a usage-limit 429', () => {
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+  })
+  const policy = adapter.providerRetryPolicy()
+  assert.equal(policy.retryableCodes.includes('RATE_LIMIT'), false)
+  assert.ok(policy.retryableCodes.includes('SERVER'))
+})
+
+test('resolved model metadata advertises reasoning, context, and max tokens', async () => {
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+  })
+  const info = await adapter.resolveModel('chatgpt', 'gpt-6-luna')
+  assert.equal(info.context?.contextWindow, 272_000)
+  assert.equal(info.defaultMaxTokens, 128_000)
+  assert.deepEqual(info.inputModalities, ['text', 'image'])
+  assert.ok((info.reasoning?.efforts.length ?? 0) > 0)
+  assert.equal(info.reasoning?.defaultEffort, 'high')
+})
