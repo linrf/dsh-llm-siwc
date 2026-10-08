@@ -90,8 +90,10 @@ class HarnessSiwcAdapter extends LlmAdapter {
     return this.#core.providerInfo(provider)
   }
 
-  override listModels(): Promise<readonly { id: string; name: string }[]> {
-    return Promise.resolve(this.#core.listModels())
+  override listModels(
+    provider: string,
+  ): Promise<readonly { provider: string; id: string; name: string }[]> {
+    return Promise.resolve(this.#core.listModels(provider))
   }
 
   override resolveModel(
@@ -118,9 +120,15 @@ export function apply(ctx: Context, config: Config): void {
   })
   const store: CredentialStore = new FileCredentialStore(settings.storeDir)
   const hostIdPath = join(settings.storeDir, 'host_id')
-  void loadOrCreateHostId(hostIdPath)
+  // Best effort: a host id that cannot be persisted must not fail activation.
+  void loadOrCreateHostId(hostIdPath).catch((error: unknown) => {
+    console.error('llm-siwc: could not persist the host id:', error)
+  })
 
   // ---- 1. inference route ----
+  // Every registration below is failure-isolated: a plugin must never take the
+  // host composition down with it. A throw here would abort this fiber and can
+  // cascade into unrelated rows (agent presets, tools) failing to start.
   const core = new SiwcResponsesAdapter({
     providers: [config.provider],
     models: config.models,
@@ -140,51 +148,59 @@ export function apply(ctx: Context, config: Config): void {
       return fresh.accessToken
     },
   })
-  ctx.llm.registerAdapter([config.provider], new HarnessSiwcAdapter(core))
-  console.log(`llm-siwc: LLM route "${config.provider}" registered`)
+  try {
+    ctx.llm.registerAdapter([config.provider], new HarnessSiwcAdapter(core))
+    console.log(`llm-siwc: LLM route "${config.provider}" registered`)
+  } catch (error) {
+    console.error(`llm-siwc: could not register the "${config.provider}" route:`, error)
+    return
+  }
 
   // ---- 2. sign-in flow ----
   const authorization = ctx.authorization
   if (authorization === undefined) {
-    ctx.logger?.warn?.(
-      'llm-siwc: no authorization service mounted; ChatGPT sign-in is unavailable in this composition',
+    console.warn(
+      'llm-siwc: no authorization service mounted; inference works, but ChatGPT sign-in is unavailable',
     )
     return
   }
 
-  const key: CredentialKey = credentialKey('llm-siwc', config.flowId)
-  authorization.registerFlow({
-    key,
-    label: config.flowLabel,
-    methods: [{ id: 'oauth', label: 'Continue with ChatGPT' }],
-    async run(session) {
-      const result = await authorize(
-        {},
-        {
-          store,
-          config: settings,
-          signal: session.signal,
-          browser: {
-            open: async (url) => {
-              session.notify({ message: 'Continue signing in to ChatGPT in your browser.', url })
+  try {
+    authorization.registerFlow({
+      key: credentialKey('llm-siwc', config.flowId),
+      label: config.flowLabel,
+      methods: [{ id: 'oauth', label: 'Continue with ChatGPT' }],
+      async run(session) {
+        const result = await authorize(
+          {},
+          {
+            store,
+            config: settings,
+            signal: session.signal,
+            browser: {
+              open: async (url) => {
+                session.notify({ message: 'Continue signing in to ChatGPT in your browser.', url })
+              },
             },
           },
-        },
-      )
+        )
 
-      if (result.credential.email) {
-        session.notify({ message: `Signed in as ${result.credential.email}.` })
-      }
-      if (!planUsageEnabled(result.credential)) {
-        session.notify({
-          message:
-            'Sign-in succeeded, but ChatGPT plan usage was not granted. Reauthorize with the full scope set or configure another billing path.',
-        })
-      }
-      await commitRecord(session, result.credential, config)
-    },
-  })
-  console.log('llm-siwc: apply() completed — sign-in flow registered')
+        if (result.credential.email) {
+          session.notify({ message: `Signed in as ${result.credential.email}.` })
+        }
+        if (!planUsageEnabled(result.credential)) {
+          session.notify({
+            message:
+              'Sign-in succeeded, but ChatGPT plan usage was not granted. Reauthorize with the full scope set or configure another billing path.',
+          })
+        }
+        await commitRecord(session, result.credential, config)
+      },
+    })
+    console.log('llm-siwc: apply() completed — sign-in flow registered')
+  } catch (error) {
+    console.error('llm-siwc: could not register the sign-in flow:', error)
+  }
 }
 
 /** Pick the credential to use for a provider route. */

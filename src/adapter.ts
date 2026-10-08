@@ -79,8 +79,15 @@ export class SiwcResponsesAdapter {
     return { id: provider, name: 'ChatGPT' }
   }
 
-  listModels(): readonly { id: string; name: string }[] {
-    return this.#options.models.map((id) => ({ id, name: id }))
+  /**
+   * Advertised models for one route.
+   *
+   * `provider` is a REQUIRED field of `LlmModelInfo`; omitting it makes the
+   * model directory reject the whole catalog with
+   * "adapter returned invalid or duplicate model metadata".
+   */
+  listModels(provider: string): readonly { provider: string; id: string; name: string }[] {
+    return this.#options.models.map((id) => ({ provider, id, name: id }))
   }
 
   async resolveModel(

@@ -26,6 +26,31 @@ import { pathToFileURL } from 'node:url'
 
 const SCOPE = '@deepseek-ai/'
 
+/**
+ * Only these peers are redirected.
+ *
+ * The hook must NOT claim the whole `@deepseek-ai/` scope: the harness creates
+ * its own loader entries dynamically (for example
+ * `@deepseek-ai/dsh-host-directory-picker-native`), and rewriting those makes
+ * `ctx.loader.create()` fail to produce a fiber. The preset audit then sees
+ * pending rows and rejects every session with `agent-preset/invalid`.
+ *
+ * Keep this list in step with the plugin's actual imports.
+ */
+const PEER_PACKAGES = new Set([
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-llm',
+  '@deepseek-ai/dsh-credentials',
+  '@deepseek-ai/dsh-authorization',
+  '@deepseek-ai/schemastery',
+])
+
+/** The package part of a specifier: `@scope/name/sub` -> `@scope/name`. */
+function packageNameOf(specifier: string): string {
+  const parts = specifier.split('/')
+  return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : (parts[0] ?? specifier)
+}
+
 let hostRoot: string | null = null
 
 /** Candidate DSH package roots, most specific first. */
@@ -99,6 +124,8 @@ export async function initPeerResolution(): Promise<void> {
   registerHooks({
     resolve(specifier, context, nextResolve) {
       if (!specifier.startsWith(SCOPE)) return nextResolve(specifier, context)
+      // Never claim packages the harness loads for itself.
+      if (!PEER_PACKAGES.has(packageNameOf(specifier))) return nextResolve(specifier, context)
       const root = hostRoot
       if (root === null) return nextResolve(specifier, context)
       try {
