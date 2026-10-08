@@ -87,7 +87,10 @@ export const Config = z.object({
    * row is neither shown nor addable, even though `/model` still works.
    *
    * The values are informational: the adapter reads its behavior from the
-   * top-level options above, so nothing here has to be set.
+   * top-level options above, so nothing here has to be set. The default still
+   * names the default route, because the Models page only renders a row once
+   * `getPath(value, ['providers', <route>])` resolves — an empty default leaves
+   * the route merely "addable" instead of listed.
    */
   providers: z
     .dict(
@@ -98,7 +101,7 @@ export const Config = z.object({
         baseUrl: z.string().default(''),
       }),
     )
-    .default({})
+    .default({ chatgpt: { displayName: 'ChatGPT', baseUrl: '' } })
     .volatile(),
 })
 
