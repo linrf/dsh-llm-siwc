@@ -670,3 +670,32 @@ test('a failed refresh does not become an unhandled rejection', async () => {
   process.off('unhandledRejection', onRejection)
   assert.deepEqual(rejections, [])
 })
+
+test('a fresh sign-in wins even when the stale credential comes first', async () => {
+  // Both credentials stay on disk after a re-registration, and readdir order is
+  // not a contract — picking the stale one looks like an auth failure right
+  // after a successful sign-in.
+  const mk = (clientId: string, createdAt: number) => ({
+    clientId,
+    subject: clientId,
+    email: `${clientId}@example.com`,
+    scopes: ['chatgpt.tokens.use.direct'],
+    accessToken: 'a',
+    refreshToken: 'r',
+    idToken: '',
+    expiresAt: createdAt + 3_600_000,
+    createdAt,
+    extAgentHostId: 'urn:uuid:x',
+  })
+  const stale = mk('oaiapp_stale', 1_000)
+  const fresh = mk('oaiapp_fresh', 2_000)
+
+  const { newestCredential } = await import('../src/credentials.ts')
+
+  // Stale first, as the directory happened to return it.
+  assert.equal(newestCredential([stale, fresh])?.clientId, 'oaiapp_fresh')
+  // And the reverse order must not change the answer.
+  assert.equal(newestCredential([fresh, stale])?.clientId, 'oaiapp_fresh')
+  // Records that are not SIWC registrations are never selected.
+  assert.equal(newestCredential([{ clientId: 'other', createdAt: 9_999 }]), null)
+})

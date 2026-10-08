@@ -231,6 +231,7 @@ src/
   adapter.ts        Responses SSE -> harness StreamChunk
   client.ts         streaming request, enforces preview constraints
   catalog.ts        live model catalog (names, context, reasoning levels)
+  credentials.ts    newest-registration selection (peer-free, testable)
   convert.ts        harness messages -> Responses input items
   sse.ts            server-sent events parser
   errors.ts         error matrix + unsupported-field stripping

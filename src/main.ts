@@ -36,6 +36,7 @@ import {
 } from './authorization.ts'
 import { FileCredentialStore, type CredentialStore } from './store.ts'
 import { ModelCatalog, FALLBACK_CATALOG } from './catalog.ts'
+import { newestCredential } from './credentials.ts'
 import { loadOrCreateHostId } from './host-id.ts'
 import { resolveConfig, type SiwcConfig } from './config.ts'
 import { PLAN_USAGE_SCOPE } from './config.ts'
@@ -474,15 +475,12 @@ async function runChatgptCommand(
 }
 
 /** Pick the credential to use for a provider route. */
-async function pickCredential(
+export async function pickCredential(
   store: CredentialStore,
   provider: string,
 ): Promise<SiwcCredential | null> {
-  const all = await store.list()
-  if (all.length === 0) return null
-  // The route is account-agnostic; the newest usable registration wins.
-  const usable = all.filter((credential) => credential.clientId.startsWith('oaiapp_'))
-  return usable.at(-1) ?? null
+  void provider
+  return newestCredential(await store.list())
 }
 
 /**

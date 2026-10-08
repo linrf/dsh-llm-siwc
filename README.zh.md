@@ -216,6 +216,7 @@ src/
   adapter.ts        Responses SSE -> harness StreamChunk
   client.ts         流式请求，执行预览接口约束
   catalog.ts        实时模型目录（名称、上下文、推理强度）
+  credentials.ts    选取最新注册（无 peer 依赖，便于测试）
   convert.ts        harness 消息 -> Responses input 条目
   sse.ts            server-sent events 解析器
   errors.ts         错误矩阵 + 不支持字段的剔除
