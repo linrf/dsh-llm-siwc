@@ -117,43 +117,81 @@ behaviour, and the accepted request shape can change at any time and may
 differ per account. You are responsible for confirming that your account is
 eligible and for complying with OpenAI's terms.
 
-## Install from this repository
-
-```bash
-git clone https://github.com/linrf/dsh-llm-siwc.git
-cd dsh-llm-siwc
-pnpm install && pnpm build
-./scripts/install.sh
-```
-
-## Build
-
-```bash
-pnpm install
-pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js
-```
-
 ## Install
 
-`dsh plugin --profile desktop …` is refused: DSH reserves the Electron-managed
-`desktop` profile. Configure it directly instead:
+No build step is involved: `lib/` is committed and the package declares its
+bundle patch, so installing the package is the whole installation.
+
+### Desktop app — the normal case
+
+Use the app's own **Plugins** page. It is the supported path for the desktop
+profile and needs no CLI and no hand-edited configuration:
+
+1. Open **Plugins** in the sidebar.
+2. Paste this repository's URL into the install field:
+   `https://github.com/linrf/dsh-llm-siwc`
+3. Install, then switch the added bundle on if it is not on already.
+
+The page reads the spec, runs the profile's package manager, shows its output,
+and activates what it added. Uninstalling asks for confirmation.
+
+### Command line — any other profile
 
 ```bash
-./scripts/install.sh
+dsh plugin --profile <name> add https://github.com/linrf/dsh-llm-siwc
 ```
 
-That script:
+Verified end to end: pnpm resolves `github:linrf/dsh-llm-siwc`, the bundle is
+added to the profile, `node_modules/dsh-llm-siwc/lib` arrives intact, and
+`dsh --profile <name> --dump-config` lists the `llm-siwc` row.
 
-1. adds this package to the profile's dependency and bundle list
-2. links the package into the profile's `node_modules`
-
-Then **restart the DeepSeek Harness app**. Uninstall by reversing both edits.
-
-To load it into an ordinary profile instead, the supported path applies:
+A local checkout works the same way with a path or `link:` spec:
 
 ```bash
 dsh plugin --profile <name> add /absolute/path/to/dsh-llm-siwc
 ```
+
+### Why `--profile desktop` is refused on the command line
+
+The desktop profile is reserved for the Electron application, and the CLI
+enforces it:
+
+| Invocation | Result |
+|---|---|
+| `dsh --profile desktop` | **always** refused |
+| `dsh plugin --profile desktop …` (plain CLI) | refused |
+| `dsh plugin --profile desktop …` (the app's own carrier) | allowed, but requires the app to have initialized the profile **and** to be fully quit |
+| the app's **Plugins** page | supported — it manages the profile it owns |
+
+The refusals read:
+
+```
+error: profile "desktop" is managed exclusively by the Electron application
+```
+
+```
+Open DeepSeek Harness Desktop once to initialize its profile, then fully quit
+it before running dsh plugin --profile desktop.
+```
+
+`scripts/install.sh` remains as a fallback: it edits the desktop profile's
+`package.json` and links the package directly. Prefer the **Plugins** page — the
+script exists only for the case where that page is unavailable.
+
+Then **restart the app** so the new bundle loads.
+
+## Development
+
+Only needed when changing the plugin; installing a release does not build.
+
+```bash
+pnpm install
+pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js (committed)
+pnpm test      # 33 tests
+```
+
+`scripts/build.mjs` bundles `src/` with esbuild. Peer imports (`@deepseek-ai/*`)
+stay external and are resolved at runtime by `lib/bootstrap.js`.
 
 ## How peer resolution works
 
