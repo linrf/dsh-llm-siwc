@@ -136,9 +136,12 @@ export function convertMessages(
       if (block.type === 'text' && typeof block.text === 'string') {
         parts.push({ type: 'input_text', text: block.text })
       } else if (block.type === 'image') {
-        // An image block carries an attachment reference that this route
-        // cannot resolve without the attachment service.
-        parts.push({ type: 'input_text', text: '[image]' })
+        // `dataUrl` is filled in by the adapter after it reads the attachment.
+        // Without one the reference cannot be resolved on this route, and a
+        // placeholder beats dropping the turn.
+        const dataUrl = typeof block.dataUrl === 'string' ? block.dataUrl : undefined
+        if (dataUrl !== undefined) parts.push({ type: 'input_image', image_url: dataUrl })
+        else parts.push({ type: 'input_text', text: '[image unavailable]' })
       }
     }
     if (parts.length > 0) input.push({ role: 'user', content: parts })

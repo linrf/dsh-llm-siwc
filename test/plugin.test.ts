@@ -362,3 +362,39 @@ test('a usage object with missing counts still yields finite numbers', async () 
   assert.equal(usage.outputTokens, 0)
   assert.ok(Number.isFinite(usage.inputTokens) && Number.isFinite(usage.outputTokens))
 })
+
+test('an image block with a resolved data URL becomes input_image', () => {
+  const result = convertMessages([
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'what is this?' },
+        {
+          type: 'image',
+          attachment: { attachmentId: 'a1', width: 10, height: 10 },
+          dataUrl: 'data:image/png;base64,AAAA',
+        },
+      ],
+    },
+  ])
+  assert.deepEqual(result.input[0], {
+    role: 'user',
+    content: [
+      { type: 'input_text', text: 'what is this?' },
+      { type: 'input_image', image_url: 'data:image/png;base64,AAAA' },
+    ],
+  })
+})
+
+test('an unresolved image block degrades to a placeholder, not a dropped turn', () => {
+  const result = convertMessages([
+    {
+      role: 'user',
+      content: [{ type: 'image', attachment: { attachmentId: 'a1', width: 10, height: 10 } }],
+    },
+  ])
+  assert.deepEqual(result.input[0], {
+    role: 'user',
+    content: [{ type: 'input_text', text: '[image unavailable]' }],
+  })
+})

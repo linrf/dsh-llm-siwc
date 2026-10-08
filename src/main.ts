@@ -48,7 +48,7 @@ export const name = 'llm-siwc'
  * is taken as two services literally named `required` and `optional`. Neither
  * ever exists, so the plugin stays pending forever and `apply()` never runs.
  */
-export const inject = ['llm', 'authorization', 'commands']
+export const inject = ['llm', 'authorization', 'commands', 'attachments']
 
 export const Config = z.object({
   /** Provider route name requests select with `GenerateOptions.provider`. */
@@ -153,6 +153,27 @@ export function apply(ctx: Context, config: Config): void {
       }
       const fresh = await ensureFreshCredential(credential.clientId, { store, config: settings })
       return fresh.accessToken
+    },
+    // Image bytes are never in the session log, so each referenced attachment
+    // is read here and handed to the wire as a data URL.
+    resolveImage: async (attachment, signal) => {
+      try {
+        const ref = attachment as { width?: number; height?: number }
+        const version = (await ctx.attachments.readImageRequest(
+          attachment as never,
+          {
+            width: ref.width ?? 1024,
+            height: ref.height ?? 1024,
+            maxBytes: 1_048_576,
+          },
+          signal,
+        )) as { data: Uint8Array; mediaType?: string }
+        const base64 = Buffer.from(version.data).toString('base64')
+        return `data:${version.mediaType ?? 'image/png'};base64,${base64}`
+      } catch (error) {
+        console.error('llm-siwc: could not read an image attachment:', error)
+        return undefined
+      }
     },
   })
   try {

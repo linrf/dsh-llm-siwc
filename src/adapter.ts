@@ -50,6 +50,14 @@ export interface AdapterOptions {
   resolveAccessToken: (provider: string) => Promise<string>
   /** Model ids to advertise in pickers. */
   models: readonly string[]
+  /**
+   * Turn one image attachment reference into a data URL for the wire.
+   *
+   * Image bytes never live in the session log, so they must be read from the
+   * attachment service per request. Returning undefined degrades that image to
+   * a placeholder instead of failing the turn.
+   */
+  resolveImage?: (attachment: unknown, signal?: AbortSignal) => Promise<string | undefined>
   /** Override for tests / self-hosted gateways. */
   baseUrl?: string
   fetchImpl?: typeof fetch
@@ -105,7 +113,9 @@ export class SiwcResponsesAdapter {
    */
   async *stream(options: GenerateOptionsLike): AsyncGenerator<StreamChunk> {
     const accessToken = await this.#options.resolveAccessToken(options.provider)
-    const converted = convertMessages(options.messages, options.system)
+    // Image bytes are not in the session log, so read them before converting.
+    const messages = await this.#resolveImages(options.messages, options.signal)
+    const converted = convertMessages(messages, options.system)
     const tools = convertTools(options.tools)
 
     let index = 0
@@ -154,6 +164,53 @@ export class SiwcResponsesAdapter {
       // silently reporting success.
       throw new Error('responses stream ended without a terminal event')
     }
+  }
+
+  /**
+   * Read every image attachment a request references and attach its data URL.
+   *
+   * Sessions never store image bytes, so a reference is resolved per request
+   * through the attachment service. Alt text and other fields are preserved;
+   * only the data URL is added. A reference that cannot be read is left as-is
+   * and degrades to a placeholder during conversion.
+   */
+  async #resolveImages(
+    messages: readonly HarnessMessage[],
+    signal?: AbortSignal,
+  ): Promise<readonly HarnessMessage[]> {
+    const resolve = this.#options.resolveImage
+    if (resolve === undefined) return messages
+
+    const out: HarnessMessage[] = []
+    for (const message of messages) {
+      if (!Array.isArray(message.content)) {
+        out.push(message)
+        continue
+      }
+      const blocks: unknown[] = []
+      let changed = false
+      for (const block of message.content) {
+        const candidate = block as { type?: string; attachment?: unknown; offloaded?: boolean }
+        if (candidate.type !== 'image' || candidate.offloaded === true || candidate.attachment === undefined) {
+          blocks.push(block)
+          continue
+        }
+        let dataUrl: string | undefined
+        try {
+          dataUrl = await resolve(candidate.attachment, signal)
+        } catch (error) {
+          console.error('llm-siwc: could not read an image attachment:', error)
+        }
+        if (dataUrl === undefined) {
+          blocks.push(block)
+          continue
+        }
+        blocks.push({ ...(block as object), dataUrl })
+        changed = true
+      }
+      out.push(changed ? ({ ...message, content: blocks } as HarnessMessage) : message)
+    }
+    return out
   }
 
   /** Translate one Responses event into zero or more harness chunks. */
