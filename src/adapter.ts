@@ -257,7 +257,7 @@ export class SiwcResponsesAdapter {
 
       case 'response.completed': {
         const response = event.response as Record<string, unknown> | undefined
-        const usage = response?.usage
+        const usage = toTokenUsage(response?.usage)
         if (usage !== undefined) yield { type: 'usage', usage }
         yield { type: 'finish', reason: this.#finishReason(response) }
         return
@@ -312,4 +312,44 @@ function safeJson(text: string): unknown {
   } catch {
     return undefined
   }
+}
+
+/**
+ * Convert a Responses usage object into the harness `TokenUsage` shape.
+ *
+ * The harness uses camelCase and requires `inputTokens`/`outputTokens`. Passing
+ * the provider's snake_case object straight through leaves both undefined, and
+ * the stored session then fails projection with:
+ *
+ *   {"path":["uncachedInputTokens"],"received":"NaN"},
+ *   {"path":["outputTokens"],"received":"NaN"}
+ *
+ * Counts are DISJOINT in the harness: `inputTokens` is UNCACHED input, with
+ * cache reads/writes reported separately.
+ */
+function toTokenUsage(raw: unknown): Record<string, number> | undefined {
+  if (raw === null || typeof raw !== 'object') return undefined
+  const usage = raw as Record<string, unknown>
+  const inputDetails = (usage.input_tokens_details ?? {}) as Record<string, unknown>
+  const outputDetails = (usage.output_tokens_details ?? {}) as Record<string, unknown>
+  const num = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : 0
+
+  const aggregateInput = num(usage.input_tokens)
+  const cacheRead = num(inputDetails.cached_tokens)
+  const cacheWrite = num(inputDetails.cache_write_tokens)
+  const output = num(usage.output_tokens)
+  const reasoning = num(outputDetails.reasoning_tokens)
+
+  const result: Record<string, number> = {
+    // Uncached input only; cached input is reported separately.
+    inputTokens: Math.max(0, aggregateInput - cacheRead),
+    outputTokens: output,
+  }
+  const total = num(usage.total_tokens)
+  if (total > 0) result.totalTokens = total
+  if (cacheRead > 0) result.cacheReadTokens = cacheRead
+  if (cacheWrite > 0) result.cacheWriteTokens = cacheWrite
+  if (reasoning > 0) result.reasoningTokens = reasoning
+  return result
 }

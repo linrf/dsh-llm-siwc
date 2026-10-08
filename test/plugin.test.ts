@@ -299,3 +299,66 @@ test('a 429 with a usage-limit code surfaces a classified pause action', async (
     return true
   })
 })
+
+test('usage is converted to the harness shape (camelCase, disjoint input)', async () => {
+  const frames = [
+    'data: {"type":"response.completed","response":{"status":"completed","usage":' +
+      '{"input_tokens":100,"input_tokens_details":{"cached_tokens":40,"cache_write_tokens":5},' +
+      '"output_tokens":20,"output_tokens_details":{"reasoning_tokens":7},"total_tokens":120}}}\n\n',
+  ]
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async () => fakeResponse(frames)) as unknown as typeof fetch,
+  })
+
+  const chunks = []
+  for await (const chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+  })) chunks.push(chunk)
+
+  const usageChunk = chunks.find((chunk) => chunk.type === 'usage')
+  assert.ok(usageChunk && usageChunk.type === 'usage', 'a usage chunk must be emitted')
+  const usage = usageChunk.usage as Record<string, unknown>
+
+  // Provider snake_case must not leak; the harness reads camelCase and would
+  // otherwise store NaN and fail session projection.
+  assert.equal(usage.input_tokens, undefined)
+  assert.equal(usage.output_tokens, undefined)
+
+  assert.equal(usage.inputTokens, 60) // 100 aggregate - 40 cached
+  assert.equal(usage.outputTokens, 20)
+  assert.equal(usage.totalTokens, 120)
+  assert.equal(usage.cacheReadTokens, 40)
+  assert.equal(usage.cacheWriteTokens, 5)
+  assert.equal(usage.reasoningTokens, 7)
+})
+
+test('a usage object with missing counts still yields finite numbers', async () => {
+  const frames = [
+    'data: {"type":"response.completed","response":{"status":"completed","usage":{}}}\n\n',
+  ]
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async () => fakeResponse(frames)) as unknown as typeof fetch,
+  })
+
+  const chunks = []
+  for await (const chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+  })) chunks.push(chunk)
+
+  const usageChunk = chunks.find((chunk) => chunk.type === 'usage')
+  assert.ok(usageChunk && usageChunk.type === 'usage')
+  const usage = usageChunk.usage as Record<string, number>
+  assert.equal(usage.inputTokens, 0)
+  assert.equal(usage.outputTokens, 0)
+  assert.ok(Number.isFinite(usage.inputTokens) && Number.isFinite(usage.outputTokens))
+})
