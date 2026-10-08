@@ -199,11 +199,18 @@ export function apply(ctx: Context, config: Config): void {
     seed: FALLBACK_CATALOG,
     onError: (error) => console.error('llm-siwc: could not read the model catalog:', error),
   })
-  // Warm the catalog so the first model pick already shows the live list. A
-  // failure here is reported by onError and changes nothing else.
-  void catalog.load().then((models) => {
-    console.log(`llm-siwc: model catalog ready (${models.length} models)`)
-  })
+  // Warm the catalog so the first model pick already shows the live list.
+  // Both outcomes are handled: the harness treats an unhandled rejection as a
+  // fatal load failure and exits the application, and a stale credential must
+  // never be able to do that.
+  void catalog.load().then(
+    (models) => {
+      console.log(`llm-siwc: model catalog ready (${models.length} models)`)
+    },
+    (error: unknown) => {
+      console.error('llm-siwc: model catalog prewarm failed:', error)
+    },
+  )
 
   const core = new SiwcResponsesAdapter({
     providers: [config.provider],

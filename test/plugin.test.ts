@@ -628,3 +628,45 @@ test('reasoningSummary "none" keeps the request to the bare effort', async () =>
   })) { /* drain */ }
   assert.deepEqual(captured?.reasoning, { effort: 'high' })
 })
+
+test('a failed refresh does not become an unhandled rejection', async () => {
+  // The harness turns any unhandled rejection into a fatal load failure that
+  // exits the application, so a dead credential must stay contained here.
+  const rejections: unknown[] = []
+  const onRejection = (reason: unknown) => rejections.push(reason)
+  process.on('unhandledRejection', onRejection)
+
+  const { ensureFreshCredential } = await import('../src/authorization.ts')
+  const expired = {
+    clientId: 'oaiapp_test',
+    subject: 's',
+    email: 'e@example.com',
+    scopes: [],
+    accessToken: 'old',
+    refreshToken: 'dead',
+    idToken: '',
+    expiresAt: Date.now() - 60_000,
+    createdAt: Date.now() - 3_600_000,
+    extAgentHostId: 'urn:uuid:test',
+  }
+  const store = {
+    get: async () => expired,
+    list: async () => [expired],
+    save: async () => {},
+    remove: async () => {},
+  }
+
+  await assert.rejects(
+    ensureFreshCredential('oaiapp_test', {
+      store: store as never,
+      config: { storeDir: '/tmp', callbackHost: '127.0.0.1', callbackPort: 1455, refreshLeadMs: 300_000, provider: 'chatgpt' } as never,
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 })) as unknown as typeof fetch,
+    }),
+  )
+
+  // Let microtasks and the rejection tracker settle.
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  process.off('unhandledRejection', onRejection)
+  assert.deepEqual(rejections, [])
+})

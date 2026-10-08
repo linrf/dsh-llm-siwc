@@ -214,12 +214,15 @@ export async function ensureFreshCredential(
   const next = previous
     .catch(() => credential) // a failed predecessor must not poison the chain
     .then(() => performRefresh(credential, deps))
-  refreshChains.set(
-    clientId,
-    next.finally(() => {
-      if (refreshChains.get(clientId) === next) refreshChains.delete(clientId)
-    }),
-  )
+  // The chain entry exists only to serialize later callers; the caller owns
+  // `next`. It needs its own handler, because a rejected refresh would
+  // otherwise surface as an unhandled rejection — which the harness treats as
+  // a fatal load failure and exits the whole application.
+  const chained = next.finally(() => {
+    if (refreshChains.get(clientId) === next) refreshChains.delete(clientId)
+  })
+  chained.catch(() => {})
+  refreshChains.set(clientId, chained)
   return next
 }
 
