@@ -12,7 +12,8 @@
       config:
         # Route name requests select with GenerateOptions.provider.
         provider: chatgpt
-        # Advertised in model pickers; the account's own catalog is authoritative.
+        # Fallback seed only. The live catalog (GET /v1/models) is what the
+        # picker shows; this list keeps it usable when that read fails.
         models:
           - gpt-6.1-sol
           - gpt-6-astra

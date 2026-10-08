@@ -27,7 +27,8 @@ fields the generic credential record does not model: `client_id`,
 | Streaming | SSE deltas mapped to harness `StreamChunk`s |
 | Tool calls | `function_call` / `function_call_output` round trips |
 | Images | Read from the attachment service per request, sent as base64 data URLs |
-| Reasoning effort | The picker's choice is forwarded as `reasoning.effort` (`off` omits the field) |
+| Model catalog | Read live from `GET /v1/models`; per-model names, context, modalities, reasoning levels |
+| Reasoning effort | Each model's own accepted levels, forwarded as `reasoning.effort` |
 | Usage | Counts mapped to the harness camelCase shape, so sessions project cleanly |
 | Retry policy | Transient failures only — **never** a usage-limit 429 |
 
@@ -66,14 +67,20 @@ node scripts/login.mjs --logout   # revoke and clear
 ### Pick the model
 
 After signing in, choose a **ChatGPT** model in the composer's model control
-(`/model`). The route advertises `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`,
-`gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`; the account's
-own catalog is authoritative.
+(`/model`). The list is read from the route's own catalog at `GET /v1/models`,
+so it reflects what the account can actually use — at the time of writing ten
+models, including `gpt-reserve`, `gpt-5.5`, and `codex-auto-review`.
 
-The same control offers a **reasoning effort** (Off / Low / Medium / High),
-which is forwarded to the request as `reasoning.effort`. Choosing Off omits the
-field rather than sending an effort value, so the default request shape is
-unchanged.
+The catalog also supplies each model's real display name, description, context
+window, input modalities, and **its own reasoning levels**. Those levels differ
+per model (`gpt-5.5` stops at `xhigh`; `gpt-6.1-sol` reaches `ultra`), which is
+why the plugin reads them instead of shipping one shared list. The chosen level
+is forwarded to the request as `reasoning.effort`.
+
+The read is cached for five minutes and shares one in-flight request. If it
+fails — offline, expired credential, preview outage — the picker falls back to
+a deliberately conservative built-in list rather than going empty, and the next
+successful read replaces it.
 
 Settings → Models also lists a **ChatGPT** row. Its fields are informational
 (display name, base URL override); the route works without configuring them.
@@ -201,6 +208,7 @@ src/
   main.ts           plugin body: registers flow, adapter, and /chatgpt
   adapter.ts        Responses SSE -> harness StreamChunk
   client.ts         streaming request, enforces preview constraints
+  catalog.ts        live model catalog (names, context, reasoning levels)
   convert.ts        harness messages -> Responses input items
   sse.ts            server-sent events parser
   errors.ts         error matrix + unsupported-field stripping
@@ -212,7 +220,7 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        system-browser launcher
   config.ts         protocol constants
-test/                    27 tests
+test/                    33 tests
 scripts/build.mjs        esbuild bundling
 scripts/install.sh       desktop-profile installation
 scripts/login.mjs        CLI sign-in / status / sign-out
