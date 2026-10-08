@@ -14,10 +14,28 @@ Verified against the live service on 2026-10-08.
 | Authorization flow `llm-siwc/chatgpt` | Any surface can start "Continue with ChatGPT" sign-in |
 | LLM adapter route `chatgpt` | Inference over `https://api.openai.com/v1/responses` |
 | `/chatgpt` command | In-GUI sign-in, account status, and sign-out |
+| Provider directory entry | A **ChatGPT** row on Settings → Models |
 
 The plugin owns its own credential store because a SIWC registration carries
 fields the generic credential record does not model: `client_id`,
 `ext_agent_host_id`, `id_token`, and the granted scopes.
+
+### What the route supports
+
+| Capability | Behaviour |
+|---|---|
+| Streaming | SSE deltas mapped to harness `StreamChunk`s |
+| Tool calls | `function_call` / `function_call_output` round trips |
+| Images | Read from the attachment service per request, sent as base64 data URLs |
+| Reasoning effort | The picker's choice is forwarded as `reasoning.effort` (`off` omits the field) |
+| Usage | Counts mapped to the harness camelCase shape, so sessions project cleanly |
+| Retry policy | Transient failures only — **never** a usage-limit 429 |
+
+**On the retry policy:** the harness default retries `RATE_LIMIT` five times. On
+this route a 429 is `subscription_sharing_usage_limit_exceeded`, a persistent
+plan limit, and OpenAI's documentation says to pause the account rather than
+repeat the request. The route therefore declares a policy that retries only
+`EMPTY_RESPONSE`, `SERVER`, `TIMEOUT`, and `TRANSPORT`.
 
 ## Using it
 
@@ -51,6 +69,14 @@ After signing in, choose a **ChatGPT** model in the composer's model control
 (`/model`). The route advertises `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`,
 `gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`; the account's
 own catalog is authoritative.
+
+The same control offers a **reasoning effort** (Off / Low / Medium / High),
+which is forwarded to the request as `reasoning.effort`. Choosing Off omits the
+field rather than sending an effort value, so the default request shape is
+unchanged.
+
+Settings → Models also lists a **ChatGPT** row. Its fields are informational
+(display name, base URL override); the route works without configuring them.
 
 ### Notes on the command
 
@@ -186,7 +212,7 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        system-browser launcher
   config.ts         protocol constants
-test/                    21 tests
+test/                    27 tests
 scripts/build.mjs        esbuild bundling
 scripts/install.sh       desktop-profile installation
 scripts/login.mjs        CLI sign-in / status / sign-out
