@@ -292,6 +292,7 @@ export class SiwcResponsesAdapter {
       {
         model: options.model,
         apiKey: accessToken,
+        sessionId: options.sessionId,
         instructions: converted.instructions,
         input: converted.input,
         tools,

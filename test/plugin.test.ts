@@ -278,6 +278,48 @@ test('the request body carries store:false, stream:true and no rejected fields',
   assert.equal(captured?.max_output_tokens, undefined)
 })
 
+test('session cache routing stays stable across requests and separate across sessions', async () => {
+  const captured: { headers: Headers; body: Record<string, unknown> }[] = []
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: async (_url, init) => {
+      captured.push({
+        headers: new Headers(init?.headers),
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      })
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    },
+  })
+
+  const sessionIds = ['session-alpha', 'session-alpha', 'session-beta', undefined, '']
+  for (const sessionId of sessionIds) {
+    for await (const _chunk of adapter.stream({
+      provider: 'chatgpt',
+      model: 'm',
+      messages: [{ role: 'user', content: 'hi' }],
+      sessionId,
+    })) { /* drain */ }
+  }
+
+  assert.deepEqual(
+    captured.map(({ headers }) => headers.get('session-id')),
+    ['session-alpha', 'session-alpha', 'session-beta', null, null],
+  )
+  for (const { headers, body } of captured) {
+    assert.equal(headers.get('authorization'), 'Bearer token')
+    assert.equal(headers.get('content-type'), 'application/json')
+    assert.equal(body.store, false)
+    assert.equal(body.stream, true)
+    assert.equal('sessionId' in body, false)
+    assert.equal('session-id' in body, false)
+  }
+  assert.ok(captured.every(({ body }) => JSON.stringify(body) === JSON.stringify(captured[0]?.body)))
+})
+
 test('a 429 with a usage-limit code surfaces a classified pause action', async () => {
   const adapter = new SiwcResponsesAdapter({
     providers: ['chatgpt'],

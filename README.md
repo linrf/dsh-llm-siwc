@@ -100,6 +100,15 @@ successful read replaces it.
 Settings → Models also lists a **ChatGPT** row. Its fields are informational
 (display name, base URL override); the route works without configuring them.
 
+### Prompt caching
+
+The plugin forwards the harness conversation's `sessionId` as the HTTP
+`session-id` header, keeping the value stable across turns and retries.
+Calls without a session ID omit the header. No new ID is generated per request.
+This preserves cache affinity; it does not guarantee a hit. Cold requests,
+changed prefixes, and backend behaviour can still produce zero cached tokens.
+`store: false` remains required and does not disable prompt caching.
+
 ### Fast mode
 
 Set `fastMode: true` on the plugin (Settings → Models → **ChatGPT** → edit, or the
@@ -232,7 +241,7 @@ Two constraints are load-bearing and easy to regress:
 ```bash
 pnpm install
 pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js (committed)
-pnpm test      # 35 tests
+pnpm test      # unit tests
 ```
 
 `scripts/build.mjs` bundles `src/` with esbuild. Peer imports (`@deepseek-ai/*`)
@@ -240,8 +249,8 @@ stay external and are resolved at runtime by `lib/bootstrap.js`.
 
 The tests cover message conversion (including the system-message lift and the
 tool-call/result pairing), SSE reassembly, adapter stream mapping, the live
-catalog, usage conversion, the mandatory `store`/`stream` flags, error
-classification, and a live-shaped tool round trip.
+catalog, usage conversion, stable session cache routing, the mandatory
+`store`/`stream` flags, error classification, and a live-shaped tool round trip.
 
 ### Layout
 
@@ -265,7 +274,7 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        system-browser launcher
   config.ts         protocol constants
-test/                    35 tests
+test/                    unit tests
 scripts/build.mjs        esbuild bundling
 scripts/install.sh       desktop-profile installation (fallback)
 scripts/login.mjs        CLI sign-in / status / sign-out

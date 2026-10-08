@@ -16,6 +16,8 @@ export interface ResponsesRequest {
   model: string
   /** OAuth access token for this call. */
   apiKey: string
+  /** Stable conversation identifier for the Responses cache-affinity header. */
+  sessionId?: string
   instructions?: string
   input: unknown[]
   tools?: unknown[]
@@ -118,6 +120,7 @@ export async function* streamResponses(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${request.apiKey ?? ''}`,
+      ...(request.sessionId ? { 'session-id': request.sessionId } : {}),
     },
     body: JSON.stringify(requestBody(request)),
     signal: request.signal,

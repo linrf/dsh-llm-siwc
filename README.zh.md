@@ -94,6 +94,13 @@ node scripts/login.mjs --logout   # 撤销并清除
 设置 → 模型 中也会出现 **ChatGPT** 行。其字段仅作展示（显示名、base URL 覆盖），
 不配置也不影响路由工作。
 
+### Prompt 缓存
+
+插件将 harness 会话的 `sessionId` 作为 HTTP `session-id` 请求头发送，同一会话的
+多轮请求和重试保持相同值。未提供会话 ID 时省略该请求头，不会为每次请求生成新 ID。
+这有助于保持缓存路由一致，但不保证命中。首次请求、前缀变化和服务端行为仍可能导致
+缓存 tokens 为零。接口仍要求 `store: false`，它不会关闭 Prompt 缓存。
+
 ### Fast 模式
 
 在插件上设置 `fastMode: true`（设置 → 模型 → **ChatGPT** → 编辑，或 profile patch），
@@ -216,15 +223,15 @@ harness 默认会对 `RATE_LIMIT` 重试五次。但在本路由上，429 表示
 ```bash
 pnpm install
 pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js（已提交）
-pnpm test      # 35 个测试
+pnpm test      # 单元测试
 ```
 
 `scripts/build.mjs` 使用 esbuild 打包 `src/`。peer 导入（`@deepseek-ai/*`）保持
 external，由 `lib/bootstrap.js` 在运行时解析。
 
 测试覆盖消息转换（含 system 消息提升、工具调用/结果的配对）、SSE 重组、适配器流
-映射、实时模型目录、用量转换、强制的 `store`/`stream` 标志、错误分类，以及一次贴近
-真实形态的工具往返。
+映射、实时模型目录、用量转换、会话缓存路由稳定性、强制的 `store`/`stream` 标志、
+错误分类，以及一次贴近真实形态的工具往返。
 
 ### 目录结构
 
@@ -248,7 +255,7 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        系统浏览器启动器
   config.ts         协议常量
-test/                    35 个测试
+test/                    单元测试
 scripts/build.mjs        esbuild 打包
 scripts/install.sh       desktop profile 安装（兜底方案）
 scripts/login.mjs        命令行登录 / 状态 / 登出
