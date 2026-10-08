@@ -24,6 +24,8 @@ import { join } from 'node:path'
 import {
   SiwcResponsesAdapter,
   type GenerateOptionsLike,
+  type ResolvedModelLike,
+  type RetryPolicyLike,
   type StreamChunk,
 } from './adapter.ts'
 import {
@@ -97,16 +99,18 @@ class HarnessSiwcAdapter extends LlmAdapter {
     return this.#core.providerInfo(provider)
   }
 
-  override listModels(
-    provider: string,
-  ): Promise<readonly { provider: string; id: string; name: string }[]> {
+  /** Route-owned retry policy: transient failures only, never RATE_LIMIT. */
+  override providerRetryPolicy(): RetryPolicyLike {
+    return this.#core.providerRetryPolicy()
+  }
+
+  override listModels(provider: string): Promise<
+    readonly { provider: string; id: string; name: string; inputModalities: readonly string[] }[]
+  > {
     return Promise.resolve(this.#core.listModels(provider))
   }
 
-  override resolveModel(
-    provider: string,
-    model: string,
-  ): Promise<{ provider: string; id: string; name: string }> {
+  override resolveModel(provider: string, model: string): Promise<ResolvedModelLike> {
     return this.#core.resolveModel(provider, model)
   }
 

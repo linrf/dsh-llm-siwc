@@ -61,6 +61,56 @@ export interface AdapterOptions {
   /** Override for tests / self-hosted gateways. */
   baseUrl?: string
   fetchImpl?: typeof fetch
+  /** Context window advertised for every model on this route. */
+  contextWindow?: number
+  /** Default output cap advertised for every model on this route. */
+  maxTokens?: number
+}
+
+/** Context window shared by the current ChatGPT-plan models. */
+export const DEFAULT_CONTEXT_WINDOW = 272_000
+/** Documented maximum output for the current ChatGPT-plan models. */
+export const DEFAULT_MAX_TOKENS = 128_000
+
+/** Resolved retry policy, as the harness stores it per provider route. */
+export interface RetryPolicyLike {
+  mode: 'normal' | 'always'
+  maxRetries: number
+  retryableCodes: readonly string[]
+  initialDelayMs: number
+  maxDelayMs: number
+  jitterRatio: number
+}
+
+/** Reasoning-effort choice as the harness model picker reads it. */
+export interface ReasoningEffortLike {
+  id: string
+  name: string
+  description?: string
+}
+
+/**
+ * Reasoning efforts this route offers.
+ *
+ * Every model on the ChatGPT-plan route reasons; the provider maps these ids
+ * onto its own thinking levels.
+ */
+export const REASONING_EFFORTS: readonly ReasoningEffortLike[] = [
+  { id: 'off', name: 'Off', description: 'No extended reasoning; fastest.' },
+  { id: 'low', name: 'Low', description: 'Light reasoning for routine tasks.' },
+  { id: 'medium', name: 'Medium', description: 'Balanced reasoning.' },
+  { id: 'high', name: 'High', description: 'Deeper reasoning for hard problems.' },
+]
+
+/** Resolved model metadata the harness reads for one exact model. */
+export interface ResolvedModelLike {
+  provider: string
+  id: string
+  name: string
+  inputModalities?: readonly string[]
+  context?: { contextWindow: number }
+  defaultMaxTokens?: number
+  reasoning?: { efforts: readonly ReasoningEffortLike[]; defaultEffort?: string }
 }
 
 interface ToolBlock {
@@ -88,21 +138,67 @@ export class SiwcResponsesAdapter {
   }
 
   /**
+   * Retry policy for this route.
+   *
+   * The harness default retries `RATE_LIMIT` (429) five times. On this route a
+   * 429 means `subscription_sharing_usage_limit_exceeded` — a persistent plan
+   * limit, not transient load. OpenAI's guidance is explicit: pause the
+   * account and do not repeat the request. So `RATE_LIMIT` is omitted here and
+   * only genuinely transient failures are retried.
+   */
+  providerRetryPolicy(): RetryPolicyLike {
+    return {
+      mode: 'normal',
+      maxRetries: 3,
+      retryableCodes: ['EMPTY_RESPONSE', 'SERVER', 'TIMEOUT', 'TRANSPORT'],
+      initialDelayMs: 500,
+      maxDelayMs: 10_000,
+      jitterRatio: 0.1,
+    }
+  }
+
+  /**
    * Advertised models for one route.
    *
    * `provider` is a REQUIRED field of `LlmModelInfo`; omitting it makes the
    * model directory reject the whole catalog with
    * "adapter returned invalid or duplicate model metadata".
    */
-  listModels(provider: string): readonly { provider: string; id: string; name: string }[] {
-    return this.#options.models.map((id) => ({ provider, id, name: id }))
+  listModels(provider: string): readonly {
+    provider: string
+    id: string
+    name: string
+    inputModalities: readonly string[]
+  }[] {
+    return this.#options.models.map((id) => ({
+      provider,
+      id,
+      name: id,
+      inputModalities: ['text', 'image'],
+    }))
   }
 
-  async resolveModel(
-    provider: string,
-    model: string,
-  ): Promise<{ provider: string; id: string; name: string }> {
-    return { provider, id: model, name: model }
+  /**
+   * Full metadata for one model.
+   *
+   * Returning only `{provider, id, name}` leaves the session without a context
+   * window, an output cap, or any reasoning-effort choice, so the model picker
+   * offers no thinking control even though every model on this route supports
+   * one.
+   */
+  async resolveModel(provider: string, model: string): Promise<ResolvedModelLike> {
+    return {
+      provider,
+      id: model,
+      name: model,
+      inputModalities: ['text', 'image'],
+      context: { contextWindow: this.#options.contextWindow ?? DEFAULT_CONTEXT_WINDOW },
+      defaultMaxTokens: this.#options.maxTokens ?? DEFAULT_MAX_TOKENS,
+      reasoning: {
+        efforts: REASONING_EFFORTS,
+        defaultEffort: 'high',
+      },
+    }
   }
 
   /**
