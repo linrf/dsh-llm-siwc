@@ -34,13 +34,14 @@ import type { SiwcCredential } from './types.ts'
 export const name = 'llm-siwc'
 
 /**
- * `authorization` is optional: a headless composition without it still serves
- * inference from already-stored credentials.
+ * Services to await before activation.
+ *
+ * MUST be the array form. cordis reads `inject` as a map of
+ * "service name → intercept config", so `{ required: [...], optional: [...] }`
+ * is taken as two services literally named `required` and `optional`. Neither
+ * ever exists, so the plugin stays pending forever and `apply()` never runs.
  */
-export const inject = {
-  required: ['llm'],
-  optional: ['authorization', 'credentials'],
-}
+export const inject = ['llm', 'authorization']
 
 export const Config = z.object({
   /** Provider route name requests select with `GenerateOptions.provider`. */
