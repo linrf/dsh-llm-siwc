@@ -94,6 +94,25 @@ node scripts/login.mjs --logout   # 撤销并清除
 设置 → 模型 中也会出现 **ChatGPT** 行。其字段仅作展示（显示名、base URL 覆盖），
 不配置也不影响路由工作。
 
+### Fast 模式
+
+在插件上设置 `fastMode: true`（设置 → 模型 → **ChatGPT** → 编辑，或 profile patch），
+即会请求 `service_tier: priority`。在本路由上用相同 prompt 做了 20 组交替配对实测：
+
+| | 中位数 | 均值 |
+|---|---|---|
+| 标准 | 17,670 ms | 18,219 ms |
+| **Fast** | **13,208 ms** | **13,164 ms** |
+
+Fast **20 组全胜**（符号检验 p = 1.9e-06），中位数快 **25%**、均值快 **28%**。默认关闭，
+因为 Fast 按 token 加收溢价。
+
+**不要用响应字段去验证它。** ChatGPT 认证路径无论请求什么，都会回
+`service_tier: "auto"`。OpenAI 在
+[codex#14204](https://github.com/openai/codex/issues/14204) 的答复是这属于预期行为——
+档位由服务端路由施加，并非端到端字段。线上的值是 `priority`；`fast` 是 Codex 的配置名，
+路由会以 `Unsupported service_tier: fast` 拒绝。
+
 ### 关于该命令的说明
 
 - 命令结果**按设计渲染在模型历史之外** —— 它不是聊天消息，模型看不到它，也不消耗
@@ -127,6 +146,7 @@ node scripts/login.mjs --logout   # 撤销并清除
 | 推理强度 | 使用每个模型自身支持的档位，作为 `reasoning.effort` 发送 |
 | 用量统计 | 计数映射为 harness 的 camelCase 结构，会话可正常投影 |
 | 重试策略 | 只重试瞬时故障 —— **绝不**重试额度超限的 429 |
+| Fast 模式 | 可选 `service_tier: priority`；实测约快 25% |
 
 ## 限制
 

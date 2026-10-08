@@ -88,6 +88,15 @@ export const Config = z.object({
    */
   reasoningSummary: z.string().default('auto'),
   /**
+   * Opt in to Fast mode (`service_tier: priority`).
+   *
+   * Measured ~25% faster on this route over 20 paired samples, but Fast bills a
+   * per-token premium, so it stays off by default. The response echoes `auto`
+   * either way and cannot confirm the tier; OpenAI's guidance for the Codex CLI
+   * is that this is expected and the field is not end to end.
+   */
+  fastMode: z.boolean().default(false),
+  /**
    * Per-route settings surface.
    *
    * This exists so the Models page lists the route. `dsh-settings` only
@@ -219,6 +228,7 @@ export function apply(ctx: Context, config: Config): void {
     resolveAccessToken,
     catalog,
     reasoningSummary: config.reasoningSummary,
+    serviceTier: config.fastMode ? 'priority' : undefined,
     // Image bytes are never in the session log, so each referenced attachment
     // is read here and handed to the wire as a data URL.
     resolveImage: async (attachment, signal) => {

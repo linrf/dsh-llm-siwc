@@ -699,3 +699,46 @@ test('a fresh sign-in wins even when the stale credential comes first', async ()
   // Records that are not SIWC registrations are never selected.
   assert.equal(newestCredential([{ clientId: 'other', createdAt: 9_999 }]), null)
 })
+
+test('Fast mode sends service_tier=priority', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    serviceTier: 'priority',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+  })) { /* drain */ }
+  assert.equal(captured?.service_tier, 'priority')
+})
+
+test('Fast mode is off by default, so the field is absent', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+  })) { /* drain */ }
+  assert.equal(captured?.service_tier, undefined)
+})

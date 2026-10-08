@@ -75,6 +75,13 @@ export interface AdapterOptions {
    */
   reasoningSummary?: string
   /**
+   * Service tier to request; `priority` selects Fast mode.
+   *
+   * Left unset by default: Fast carries a per-token premium and the response
+   * cannot confirm the tier, so opting in stays the user's decision.
+   */
+  serviceTier?: string
+  /**
    * Live model catalog.
    *
    * When present, `listModels` and `resolveModel` report what the route
@@ -290,6 +297,7 @@ export class SiwcResponsesAdapter {
         tools,
         reasoningEffort: options.reasoningEffort,
         reasoningSummary: this.#options.reasoningSummary,
+        serviceTier: this.#options.serviceTier,
         signal: options.signal,
       },
       { baseUrl: this.#options.baseUrl, fetchImpl: this.#options.fetchImpl },

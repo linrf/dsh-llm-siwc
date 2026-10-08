@@ -34,6 +34,15 @@ export interface ResponsesRequest {
    * however high the effort is set. `none` opts back out.
    */
   reasoningSummary?: string
+  /**
+   * Service tier for this call; `priority` enables Fast mode.
+   *
+   * A ChatGPT-authenticated route echoes `auto` in the response whatever is
+   * requested, so the field cannot confirm the tier was applied — OpenAI says
+   * the same for the Codex CLI. Latency is the only observable, and measured
+   * Fast mode is ~25% faster here.
+   */
+  serviceTier?: string
   signal?: AbortSignal
 }
 
@@ -82,6 +91,11 @@ function requestBody(request: ResponsesRequest): Record<string, unknown> {
         ? {}
         : { summary: request.reasoningSummary }),
     }
+  }
+  // Fast mode. Sent only when configured; the route rejects unknown values
+  // with 400, and `fast` is a Codex config name rather than a wire value.
+  if (request.serviceTier !== undefined && request.serviceTier.length > 0) {
+    body.service_tier = request.serviceTier
   }
   // Defensive: nothing the route rejects may reach the wire.
   return stripUnsupportedFields(body)

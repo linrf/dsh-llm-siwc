@@ -100,6 +100,27 @@ successful read replaces it.
 Settings → Models also lists a **ChatGPT** row. Its fields are informational
 (display name, base URL override); the route works without configuring them.
 
+### Fast mode
+
+Set `fastMode: true` on the plugin (Settings → Models → **ChatGPT** → edit, or the
+profile patch) to request `service_tier: priority`. Measured on this route over
+20 interleaved pairs with identical prompts:
+
+| | median | mean |
+|---|---|---|
+| standard | 17,670 ms | 18,219 ms |
+| **Fast** | **13,208 ms** | **13,164 ms** |
+
+Fast won **20 of 20 pairs** (sign test p = 1.9e-06), a **25% median / 28% mean**
+improvement. It is off by default because Fast bills a per-token premium.
+
+**Do not try to confirm it from the response.** A ChatGPT-authenticated route
+echoes `service_tier: "auto"` whatever you request. OpenAI's answer on
+[codex#14204](https://github.com/openai/codex/issues/14204) is that this is
+expected — the tier is applied by server-side routing and is not an end-to-end
+field. The wire value is `priority`; `fast` is a Codex config name and the route
+rejects it with `Unsupported service_tier: fast`.
+
 ### Notes on the command
 
 - A command result is rendered **outside model history** by design — it is not
@@ -135,6 +156,7 @@ fields the generic credential record does not model: `client_id`,
 | Reasoning effort | Each model's own accepted levels, forwarded as `reasoning.effort` |
 | Usage | Counts mapped to the harness camelCase shape, so sessions project cleanly |
 | Retry policy | Transient failures only — never a usage-limit 429 |
+| Fast mode | Opt-in `service_tier: priority`; measured ~25% faster |
 
 ## Limitations
 
