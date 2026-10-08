@@ -582,3 +582,49 @@ test('a stale catalog is not refetched while its TTL holds', async () => {
   await catalog.load()
   assert.equal(calls, 1)
 })
+
+test('a reasoning summary is requested, so the thinking stream has content', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    reasoningSummary: 'auto',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+    reasoningEffort: 'high',
+  })) { /* drain */ }
+  assert.deepEqual(captured?.reasoning, { effort: 'high', summary: 'auto' })
+})
+
+test('reasoningSummary "none" keeps the request to the bare effort', async () => {
+  let captured: Record<string, unknown> | undefined
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    reasoningSummary: 'none',
+    fetchImpl: (async (_url: string, init: { body: string }) => {
+      captured = JSON.parse(init.body) as Record<string, unknown>
+      return fakeResponse([
+        'data: {"type":"response.completed","response":{"status":"completed"}}\n\n',
+      ])
+    }) as unknown as typeof fetch,
+  })
+  for await (const _chunk of adapter.stream({
+    provider: 'chatgpt',
+    model: 'm',
+    messages: [{ role: 'user', content: 'hi' }],
+    reasoningEffort: 'high',
+  })) { /* drain */ }
+  assert.deepEqual(captured?.reasoning, { effort: 'high' })
+})

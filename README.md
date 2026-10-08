@@ -38,6 +38,17 @@ plan limit, and OpenAI's documentation says to pause the account rather than
 repeat the request. The route therefore declares a policy that retries only
 `EMPTY_RESPONSE`, `SERVER`, `TIMEOUT`, and `TRANSPORT`.
 
+**On reasoning output:** the route sends no reasoning text unless a summary is
+requested, so the plugin asks for `reasoning.summary: auto` — configurable as
+`reasoningSummary`, with `none` to opt out. Two route behaviours are worth
+knowing, both verified against the live endpoint:
+
+- A summary arrives only when the request carries **no tools**. With tools
+  present the reasoning deltas never come, so the thinking stream stays empty in
+  ordinary tool-using sessions. The plugin keeps requesting the summary anyway,
+  so it starts working if the route changes.
+- `effort: low` yields no summary even without tools; `medium` and above do.
+
 ## Using it
 
 ### Sign in
@@ -187,7 +198,7 @@ Only needed when changing the plugin; installing a release does not build.
 ```bash
 pnpm install
 pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js (committed)
-pnpm test      # 33 tests
+pnpm test      # 35 tests
 ```
 
 `scripts/build.mjs` bundles `src/` with esbuild. Peer imports (`@deepseek-ai/*`)
@@ -258,7 +269,7 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        system-browser launcher
   config.ts         protocol constants
-test/                    33 tests
+test/                    35 tests
 scripts/build.mjs        esbuild bundling
 scripts/install.sh       desktop-profile installation
 scripts/login.mjs        CLI sign-in / status / sign-out

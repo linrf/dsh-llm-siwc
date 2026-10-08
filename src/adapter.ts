@@ -67,6 +67,14 @@ export interface AdapterOptions {
   /** Default output cap advertised for every model on this route. */
   maxTokens?: number
   /**
+   * Reasoning summary to request, or `none` to leave the thinking stream empty.
+   *
+   * The route reports no reasoning text unless a summary is requested, so
+   * without this the harness `reasoning-delta` chunks never fire however high
+   * the selected effort is.
+   */
+  reasoningSummary?: string
+  /**
    * Live model catalog.
    *
    * When present, `listModels` and `resolveModel` report what the route
@@ -281,6 +289,7 @@ export class SiwcResponsesAdapter {
         input: converted.input,
         tools,
         reasoningEffort: options.reasoningEffort,
+        reasoningSummary: this.#options.reasoningSummary,
         signal: options.signal,
       },
       { baseUrl: this.#options.baseUrl, fetchImpl: this.#options.fetchImpl },

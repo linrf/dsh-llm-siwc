@@ -26,6 +26,14 @@ export interface ResponsesRequest {
    * so a route that rejects the field is unaffected by the default.
    */
   reasoningEffort?: string
+  /**
+   * Whether to ask for a reasoning summary.
+   *
+   * Without this the route reports no reasoning text at all, so the harness
+   * `reasoning-delta` chunks never fire and the thinking stream stays empty
+   * however high the effort is set. `none` opts back out.
+   */
+  reasoningSummary?: string
   signal?: AbortSignal
 }
 
@@ -66,7 +74,14 @@ function requestBody(request: ResponsesRequest): Record<string, unknown> {
   // `off` means "do not reason": omit the field entirely rather than sending
   // an effort value the route may not accept.
   if (request.reasoningEffort !== undefined && request.reasoningEffort !== 'off') {
-    body.reasoning = { effort: request.reasoningEffort }
+    body.reasoning = {
+      effort: request.reasoningEffort,
+      // Without a summary request the route sends no reasoning text, so the
+      // harness never sees a reasoning delta to render.
+      ...(request.reasoningSummary === undefined || request.reasoningSummary === 'none'
+        ? {}
+        : { summary: request.reasoningSummary }),
+    }
   }
   // Defensive: nothing the route rejects may reach the wire.
   return stripUnsupportedFields(body)

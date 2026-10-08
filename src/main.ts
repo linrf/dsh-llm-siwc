@@ -79,6 +79,14 @@ export const Config = z.object({
   /** Label shown to the user on the sign-in surface. */
   flowLabel: z.string().default('ChatGPT'),
   /**
+   * Reasoning summary to request: `auto`, `concise`, or `none`.
+   *
+   * The route sends no reasoning text unless a summary is asked for, so the
+   * harness thinking stream stays empty without it. `none` opts out, for when
+   * the extra output tokens matter more than seeing the reasoning.
+   */
+  reasoningSummary: z.string().default('auto'),
+  /**
    * Per-route settings surface.
    *
    * This exists so the Models page lists the route. `dsh-settings` only
@@ -202,6 +210,7 @@ export function apply(ctx: Context, config: Config): void {
     models: config.models,
     resolveAccessToken,
     catalog,
+    reasoningSummary: config.reasoningSummary,
     // Image bytes are never in the session log, so each referenced attachment
     // is read here and handed to the wire as a data URL.
     resolveImage: async (attachment, signal) => {
