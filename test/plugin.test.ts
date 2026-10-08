@@ -44,8 +44,7 @@ test('assistant tool calls become function_call items', () => {
   const result = convertMessages([
     {
       role: 'assistant',
-      content: '',
-      toolCalls: [{ id: 'call_1', name: 'bash', arguments: '{"cmd":"ls"}' }],
+      content: [{ type: 'tool-call', id: 'call_1', name: 'bash', arguments: '{"cmd":"ls"}' }],
     },
   ])
   assert.deepEqual(result.input[0], {
@@ -54,6 +53,17 @@ test('assistant tool calls become function_call items', () => {
     name: 'bash',
     arguments: '{"cmd":"ls"}',
   })
+})
+
+test('an assistant tool call paired with its result stays ordered', () => {
+  const result = convertMessages([
+    { role: 'assistant', content: [{ type: 'tool-call', id: 'c9', name: 'read', arguments: '{}' }] },
+    { role: 'tool', toolCallId: 'c9', content: [{ type: 'text', text: 'contents' }] },
+  ])
+  assert.deepEqual(result.input, [
+    { type: 'function_call', call_id: 'c9', name: 'read', arguments: '{}' },
+    { type: 'function_call_output', call_id: 'c9', output: 'contents' },
+  ])
 })
 
 test('tool results become function_call_output items keyed by call id', () => {
@@ -69,10 +79,10 @@ test('tool results become function_call_output items keyed by call id', () => {
 
 test('a full assistant-tool-user round trip keeps order', () => {
   const result = convertMessages([
-    { role: 'system', content: 'sys' },
-    { role: 'user', content: 'do it' },
-    { role: 'assistant', content: '', toolCalls: [{ id: 'c1', name: 'f', arguments: '{}' }] },
-    { role: 'tool', toolCallId: 'c1', content: 'ok' },
+    { role: 'system', content: [{ type: 'text', text: 'sys' }] },
+    { role: 'user', content: [{ type: 'text', text: 'do it' }] },
+    { role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'f', arguments: '{}' }] },
+    { role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: 'ok' }] },
   ])
   assert.deepEqual(
     result.input.map((item) => item.type ?? item.role),

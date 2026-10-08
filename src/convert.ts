@@ -1,27 +1,45 @@
 /**
- * Translate harness request messages into Responses API `input` items.
+ * Translate harness messages into Responses API `input` items.
  *
- * Preview constraint (verified live): an explicit
- * `{type:"message", role:"system"}` item is REJECTED. The leading system
- * message must be lifted into top-level `instructions` instead.
+ * The harness message shape (verified against dsh-llm) is:
  *
- * The same applies to tool results: they travel as `function_call_output`
- * items correlated by `call_id`, and assistant tool calls as `function_call`.
+ *   { role, content: ContentBlock[], ... }
+ *
+ * where a block is one of
+ *   { type: 'text',       text }
+ *   { type: 'reasoning',  text }
+ *   { type: 'tool-call',  id, name, arguments }
+ *   { type: 'image' | 'file', attachment }
+ *
+ * Tool invocations live INSIDE the content array. There is no message-level
+ * `toolCalls` field; reading one yields nothing, which leaves the route with a
+ * `function_call_output` and no matching `function_call`:
+ *
+ *     No tool call found for function call output with call_id call_…
+ *
+ * Tool results arrive as role:'tool' messages carrying `toolCallId`.
+ *
+ * Preview constraint: an explicit `{type:'message', role:'system'}` item is
+ * REJECTED, so system/developer text is lifted into top-level `instructions`.
  */
 
 /** Minimal structural views of the harness message vocabulary. */
-export interface TextPart {
+export interface ContentBlockLike {
   type: string
   text?: string
-  image?: unknown
+  id?: string
+  name?: string
+  arguments?: string
+  attachment?: unknown
   [key: string]: unknown
 }
 
 export interface HarnessMessage {
   role: string
-  content?: string | TextPart[]
-  toolCalls?: { id: string; name: string; arguments: string }[]
+  content?: string | ContentBlockLike[]
+  /** Present on role:'tool' messages. */
   toolCallId?: string
+  isError?: boolean
   [key: string]: unknown
 }
 
@@ -40,42 +58,26 @@ export interface ConvertedRequest {
   input: ResponsesInputItem[]
 }
 
-function textOf(content: string | TextPart[] | undefined): string {
-  if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return ''
-  return content
-    .filter((part) => part.type === 'text' && typeof part.text === 'string')
-    .map((part) => part.text as string)
+function blocksOf(message: HarnessMessage): ContentBlockLike[] {
+  if (Array.isArray(message.content)) return message.content as ContentBlockLike[]
+  if (typeof message.content === 'string' && message.content !== '') {
+    return [{ type: 'text', text: message.content }]
+  }
+  return []
+}
+
+function textOf(blocks: readonly ContentBlockLike[]): string {
+  return blocks
+    .filter((block) => block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text as string)
     .join('')
 }
 
-/** Convert one content array into Responses content parts. */
-function contentParts(content: string | TextPart[] | undefined): unknown[] {
-  if (typeof content === 'string') {
-    return content === '' ? [] : [{ type: 'input_text', text: content }]
-  }
-  if (!Array.isArray(content)) return []
-  const parts: unknown[] = []
-  for (const part of content) {
-    if (part.type === 'text' && typeof part.text === 'string') {
-      parts.push({ type: 'input_text', text: part.text })
-    } else if (part.type === 'image' && part.image !== undefined) {
-      // Images are passed through when the selected model accepts them.
-      const image = part.image as Record<string, unknown>
-      const url = typeof image.url === 'string' ? image.url : undefined
-      const data = typeof image.data === 'string' ? image.data : undefined
-      if (url) parts.push({ type: 'input_image', image_url: url })
-      else if (data) parts.push({ type: 'input_image', image_url: data })
-    }
-  }
-  return parts
-}
-
 /**
- * Convert harness messages into a Responses request body fragment.
+ * Convert harness messages into a Responses request fragment.
  *
  * @param messages - ordered messages as the harness assembled them.
- * @param system - optional one-shot system prompt (already lifted by the loop).
+ * @param system - optional one-shot system prompt.
  * @returns `instructions` plus the `input` item list.
  */
 export function convertMessages(
@@ -89,10 +91,11 @@ export function convertMessages(
 
   for (const message of messages) {
     const role = message.role
+    const blocks = blocksOf(message)
 
     if (role === 'system' || role === 'developer') {
       // MUST NOT become an input item: explicit system items are rejected.
-      const text = textOf(message.content)
+      const text = textOf(blocks)
       if (text.trim() !== '') instructionParts.push(text)
       continue
     }
@@ -101,26 +104,26 @@ export function convertMessages(
       input.push({
         type: 'function_call_output',
         call_id: String(message.toolCallId ?? ''),
-        output:
-          typeof message.content === 'string'
-            ? message.content
-            : textOf(message.content),
+        output: textOf(blocks),
       })
       continue
     }
 
     if (role === 'assistant') {
-      if (Array.isArray(message.toolCalls)) {
-        for (const call of message.toolCalls) {
-          input.push({
-            type: 'function_call',
-            call_id: call.id,
-            name: call.name,
-            arguments: call.arguments || '{}',
-          })
-        }
+      // Tool invocations are content blocks, not a message-level field.
+      for (const block of blocks) {
+        if (block.type !== 'tool-call') continue
+        input.push({
+          type: 'function_call',
+          call_id: String(block.id ?? ''),
+          name: String(block.name ?? ''),
+          arguments:
+            typeof block.arguments === 'string' && block.arguments !== ''
+              ? block.arguments
+              : '{}',
+        })
       }
-      const text = textOf(message.content)
+      const text = textOf(blocks)
       if (text.trim() !== '') {
         input.push({ role: 'assistant', content: [{ type: 'output_text', text }] })
       }
@@ -128,10 +131,17 @@ export function convertMessages(
     }
 
     // user (and anything else the loop passes through) becomes an input message.
-    const parts = contentParts(message.content)
-    if (parts.length > 0) {
-      input.push({ role: 'user', content: parts })
+    const parts: unknown[] = []
+    for (const block of blocks) {
+      if (block.type === 'text' && typeof block.text === 'string') {
+        parts.push({ type: 'input_text', text: block.text })
+      } else if (block.type === 'image') {
+        // An image block carries an attachment reference that this route
+        // cannot resolve without the attachment service.
+        parts.push({ type: 'input_text', text: '[image]' })
+      }
     }
+    if (parts.length > 0) input.push({ role: 'user', content: parts })
   }
 
   const instructions = instructionParts.join('\n\n')
