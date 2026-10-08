@@ -1,0 +1,31 @@
+# The dsh-llm-siwc bundle patch: one insert over the composition that
+# dsh-base and the mode bundle already built, so the `llm`, `authorization`,
+# and `credentials` rows this plugin injects are mounted before it loads.
+#
+# A patch replaces a targeted row's whole `config`; inserted rows are keyed by
+# the ids below, so later bundle layers and the profile's own
+# cordis.patch.yml can address them.
+
+- insert:
+    - id: llm-siwc
+      name: 'dsh-llm-siwc'
+      config:
+        # Route name requests select with GenerateOptions.provider.
+        provider: chatgpt
+        # Advertised in model pickers; the account's own catalog is authoritative.
+        models:
+          - gpt-6.1-sol
+          - gpt-6-astra
+          - gpt-6-sol
+          - gpt-6-luna
+          - gpt-5.6-sol
+          - gpt-5.6-terra
+          - gpt-5.6-luna
+        # Credentials and the stable host id live outside the workspace.
+        storeDir: !!js dshHomePath('siwc')
+        # Docs forbid `localhost`; the literal loopback address is required.
+        callbackHost: 127.0.0.1
+        callbackPort: 1455
+        refreshLeadMs: 300000
+        flowId: chatgpt
+        flowLabel: ChatGPT

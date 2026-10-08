@@ -1,0 +1,134 @@
+# dsh-llm-siwc
+
+A DeepSeek Harness **plugin** that adds ChatGPT-plan inference through OpenAI's
+official [Sign in with ChatGPT](https://developers.openai.com/siwc) (SIWC)
+flow. No DSH rebuild is involved: this is a standalone bundle the running
+application loads from its profile.
+
+Verified against the live service on 2026-10-08.
+
+## What it registers
+
+| Registration | Effect |
+|---|---|
+| Authorization flow `llm-siwc/chatgpt` | Any surface can start "Continue with ChatGPT" sign-in |
+| LLM adapter route `chatgpt` | Inference over `https://api.openai.com/v1/responses` |
+
+The plugin owns its own credential store because a SIWC registration carries
+fields the generic credential record does not model: `client_id`,
+`ext_agent_host_id`, `id_token`, and the granted scopes.
+
+## Requirements
+
+- DSH **0.2.0-rc.2** (the plugin declares `>=0.2.0-rc.2 <0.3.0` peers; DSH
+  refuses to load a plugin whose DSH peer ranges do not match its runtime)
+- A ChatGPT plan that is eligible for plan usage
+- Node 22.19+ to build
+
+## Build
+
+```bash
+pnpm install
+pnpm build     # -> lib/bootstrap.js, lib/index.js, lib/main.js
+```
+
+## Install
+
+`dsh plugin --profile desktop …` is refused: DSH reserves the Electron-managed
+`desktop` profile. Configure it directly instead:
+
+```bash
+./scripts/install.sh
+```
+
+That script:
+
+1. adds this package to the profile's dependency and bundle list
+2. links the package into the profile's `node_modules`
+
+Then **restart the DeepSeek Harness app**. Uninstall by reversing both edits.
+
+To load it into an ordinary profile instead, the supported path applies:
+
+```bash
+dsh plugin --profile <name> add /absolute/path/to/dsh-llm-siwc
+```
+
+## How peer resolution works
+
+The plugin's peers (`@deepseek-ai/dsh-llm`, …) live inside the packaged
+`app.asar/dsh/node_modules`, which ordinary `node_modules` resolution from the
+plugin's own directory cannot reach. `lib/bootstrap.js` discovers the running
+installation and installs a synchronous resolve hook that maps
+`@deepseek-ai/<name>` onto it via `createRequire`, so `exports`/`main` decide
+the entry file exactly as node would.
+
+Two constraints are load-bearing and easy to regress:
+
+- the resolve hook must be **synchronous** — an async hook makes node reject
+  the result (`shortCircuit` reads as `undefined`)
+- the hook must return the package's **entry file**, not its directory — ESM
+  does not resolve a directory to a manifest entry the way CJS does
+
+`DSH_HOST_ROOT` overrides discovery when needed.
+
+## Protocol notes (all verified live)
+
+- `client_id=dynamic_agent_client` is the **registration entrypoint**; the
+  callback returns the issued `oaiapp_…`, which is what token exchange uses
+- the ID token's `aud` is an **array** (`["oaiapp_…"]`); the access token's
+  `aud` is the string `https://api.openai.com/v1`
+- the loopback callback must be `127.0.0.1`, never `localhost`
+- access tokens last **1 hour** and refresh tokens **30 days**; refresh tokens
+  rotate, so refreshes are serialized per registration
+- inference must use `api.openai.com/v1/responses` with `store:false` and
+  `stream:true`, **never** `chatgpt.com/backend-api`
+- `ext_agent_host_id` is generated once and reused; regenerate it and the
+  service treats the machine as a new host
+
+## Preview limitations
+
+The Responses route rejects `temperature`, `top_p`, `max_output_tokens`,
+`metadata`, `prompt`, `truncation`, `user`, and more —
+`stripUnsupportedFields()` removes them. It also rejects explicit
+`{"type":"message","role":"system"}` items (they are lifted into
+`instructions`) and `previous_response_id` over HTTP (history is replayed).
+
+**Client-side function tools work.** A full tool-call → tool-result →
+final-answer round trip was verified live; only *hosted* tools (Code
+Interpreter, file search, hosted MCP, `tool_search`) are unavailable.
+
+## Layout
+
+```
+src/
+  bootstrap.ts      host discovery + synchronous peer resolve hook
+  index.ts          entry: init bootstrap, then load the body
+  main.ts           plugin body: registers flow + adapter
+  adapter.ts        Responses SSE -> harness StreamChunk
+  client.ts         streaming request, enforces preview constraints
+  convert.ts        harness messages -> Responses input items
+  sse.ts            server-sent events parser
+  errors.ts         error matrix + unsupported-field stripping
+  authorization.ts  authorize / ensureFreshCredential / signOut
+  oauth.ts          authorize URL, code exchange, refresh, revoke
+  verify.ts         ID-token verification (JWKS, iss, aud, exp, nonce)
+  callback.ts       loopback listener with port fallback
+  store.ts          credential persistence (0600, atomic)
+  host-id.ts        ext_agent_host_id
+  browser.ts        system-browser launcher
+  config.ts         protocol constants
+test/               18 tests
+scripts/build.mjs   esbuild bundling
+scripts/install.sh  desktop-profile installation
+```
+
+## Tests
+
+```bash
+pnpm test
+```
+
+Covers message conversion (including the system-message lift), SSE
+reassembly, adapter stream mapping, the mandatory `store`/`stream` flags,
+error classification, and a live-shaped tool round trip.

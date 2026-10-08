@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Build output is committed: the plugin is loaded from the repository as-is,
+# and DSH reads lib/index.js directly.
+# lib/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
