@@ -1,3 +1,5 @@
+English | [中文](README.zh.md)
+
 # dsh-llm-siwc
 
 A DeepSeek Harness **plugin** that adds ChatGPT-plan inference through OpenAI's

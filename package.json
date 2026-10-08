@@ -9,9 +9,10 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/",
+    "README.md",
+    "README.zh.md",
     "cordis.patch.yml",
-    "README.md"
+    "lib/"
   ],
   "dsh": {
     "bundle": {
