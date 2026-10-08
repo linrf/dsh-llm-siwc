@@ -25,6 +25,30 @@ fields the generic credential record does not model: `client_id`,
 - A ChatGPT plan that is eligible for plan usage
 - Node 22.19+ to build
 
+## Disclaimer
+
+An independent, unofficial community plugin. It is not affiliated with,
+endorsed by, or supported by OpenAI or DeepSeek.
+
+It uses OpenAI's documented [Sign in with ChatGPT](https://developers.openai.com/siwc)
+OAuth flow to spend the signed-in user's own ChatGPT plan quota. It stores no
+credentials of its own beyond the registration the user explicitly authorizes,
+and it never sees account passwords.
+
+ChatGPT plan usage on this route is a preview capability. Eligibility, quota
+behaviour, and the accepted request shape can change at any time and may
+differ per account. You are responsible for confirming that your account is
+eligible and for complying with OpenAI's terms.
+
+## Install from this repository
+
+```bash
+git clone https://github.com/linrf/dsh-llm-siwc.git
+cd dsh-llm-siwc
+pnpm install && pnpm build
+./scripts/install.sh
+```
+
 ## Build
 
 ```bash
