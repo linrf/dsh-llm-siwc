@@ -13,10 +13,54 @@ Verified against the live service on 2026-10-08.
 |---|---|
 | Authorization flow `llm-siwc/chatgpt` | Any surface can start "Continue with ChatGPT" sign-in |
 | LLM adapter route `chatgpt` | Inference over `https://api.openai.com/v1/responses` |
+| `/chatgpt` command | In-GUI sign-in, account status, and sign-out |
 
 The plugin owns its own credential store because a SIWC registration carries
 fields the generic credential record does not model: `client_id`,
 `ext_agent_host_id`, `id_token`, and the granted scopes.
+
+## Using it
+
+### Sign in
+
+Three equivalent ways; pick whichever fits:
+
+**In the GUI** — type `/chatgpt login` in the composer:
+
+```
+/chatgpt           show the signed-in account (same as /chatgpt status)
+/chatgpt status    account, client id, plan-usage scope, access-token expiry
+/chatgpt login     open the browser and run the official SIWC flow
+/chatgpt logout    revoke the session and clear the local credential
+```
+
+The browser round trip runs in the background, so `/chatgpt login` returns
+immediately; confirm with `/chatgpt status` once you finish authorizing.
+
+**From the CLI** — no session required:
+
+```bash
+node scripts/login.mjs            # sign in
+node scripts/login.mjs --status   # show the stored account
+node scripts/login.mjs --logout   # revoke and clear
+```
+
+### Pick the model
+
+After signing in, choose a **ChatGPT** model in the composer's model control
+(`/model`). The route advertises `gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`,
+`gpt-6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, and `gpt-5.6-luna`; the account's
+own catalog is authoritative.
+
+### Notes on the command
+
+- A command result is rendered **outside model history** by design — it is not
+  a chat message, so the model never sees it and no tokens are spent on it.
+- Commands are bound to a receiving agent, so **run them from a session**. In a
+  fresh, session-less window use `scripts/login.mjs` instead.
+- The command deliberately declares no `input` descriptor: a host descriptor
+  with `input` resolves as `leadingInput` (the composer waits for more text),
+  which would make a bare `/chatgpt` appear to do nothing.
 
 ## Requirements
 
@@ -128,7 +172,7 @@ Interpreter, file search, hosted MCP, `tool_search`) are unavailable.
 src/
   bootstrap.ts      host discovery + synchronous peer resolve hook
   index.ts          entry: init bootstrap, then load the body
-  main.ts           plugin body: registers flow + adapter
+  main.ts           plugin body: registers flow, adapter, and /chatgpt
   adapter.ts        Responses SSE -> harness StreamChunk
   client.ts         streaming request, enforces preview constraints
   convert.ts        harness messages -> Responses input items
@@ -142,9 +186,12 @@ src/
   host-id.ts        ext_agent_host_id
   browser.ts        system-browser launcher
   config.ts         protocol constants
-test/               18 tests
-scripts/build.mjs   esbuild bundling
-scripts/install.sh  desktop-profile installation
+test/                    21 tests
+scripts/build.mjs        esbuild bundling
+scripts/install.sh       desktop-profile installation
+scripts/login.mjs        CLI sign-in / status / sign-out
+scripts/rollback.sh      remove the plugin if the app stops working
+scripts/repair-usage.mjs rewrite stored usage blocks written in provider shape
 ```
 
 ## Tests
@@ -153,6 +200,26 @@ scripts/install.sh  desktop-profile installation
 pnpm test
 ```
 
-Covers message conversion (including the system-message lift), SSE
-reassembly, adapter stream mapping, the mandatory `store`/`stream` flags,
-error classification, and a live-shaped tool round trip.
+Covers message conversion (including the system-message lift and the
+tool-call/result pairing), SSE reassembly, adapter stream mapping, usage
+conversion, the mandatory `store`/`stream` flags, error classification, and a
+live-shaped tool round trip.
+
+## Troubleshooting
+
+If sessions fail to create after installing, run the rollback script and see
+the issue tracker:
+
+```bash
+bash scripts/rollback.sh    # removes the plugin from the desktop profile
+```
+
+Sessions created before v0.1.0-era builds may hold `usage` blocks in the
+provider's snake_case shape, which breaks session projection with
+`uncachedInputTokens: NaN`. `scripts/repair-usage.mjs` rewrites them in place
+(dry-run by default, backs each log up as `*.bak-usage`):
+
+```bash
+node scripts/repair-usage.mjs           # report only
+node scripts/repair-usage.mjs --apply   # back up and rewrite
+```

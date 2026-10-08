@@ -220,8 +220,11 @@ export function apply(ctx: Context, config: Config): void {
     ctx.commands.register({
       definitionId: CommandDefinitionId('@deepseek-ai/dsh-llm-siwc'),
       name: 'chatgpt',
-      description: 'Sign in to ChatGPT, show the signed-in account, or sign out',
-      input: { hint: '[login|status|logout]' },
+      // No `input` descriptor on purpose: a host descriptor WITH `input` is
+      // resolved as `leadingInput` (the composer waits for more text), so a
+      // bare `/chatgpt` would appear to do nothing until something else is
+      // typed. Without it the line is `execute` and runs immediately.
+      description: 'Sign in to ChatGPT, show the signed-in account, or sign out — /chatgpt [login|status|logout]',
       handler: (invocation) =>
         runChatgptCommand(invocation, {
           store,
