@@ -107,6 +107,9 @@ class HarnessSiwcAdapter extends LlmAdapter {
 }
 
 export function apply(ctx: Context, config: Config): void {
+  // Diagnostics: activation failures in this composition are silent cascades,
+  // so the plugin reports what it actually managed to register.
+  console.log(`llm-siwc: apply() entered (provider=${config.provider}, models=${config.models.length})`)
   const settings: SiwcConfig = resolveConfig({
     storeDir: config.storeDir === '' ? defaultStoreDir() : config.storeDir,
     callbackHost: config.callbackHost,
@@ -138,6 +141,7 @@ export function apply(ctx: Context, config: Config): void {
     },
   })
   ctx.llm.registerAdapter([config.provider], new HarnessSiwcAdapter(core))
+  console.log(`llm-siwc: LLM route "${config.provider}" registered`)
 
   // ---- 2. sign-in flow ----
   const authorization = ctx.authorization
@@ -180,6 +184,7 @@ export function apply(ctx: Context, config: Config): void {
       await commitRecord(session, result.credential, config)
     },
   })
+  console.log('llm-siwc: apply() completed — sign-in flow registered')
 }
 
 /** Pick the credential to use for a provider route. */
