@@ -130,6 +130,15 @@ export interface CatalogOptions {
   fetchImpl?: typeof fetch
   /** How long a successful read is reused. */
   ttlMs?: number
+  /**
+   * Upper bound for one catalog read.
+   *
+   * The catalog load is on the critical path of the harness' model catalog
+   * (every provider is awaited), so a stuck socket must never be able to hang
+   * the model picker forever: after this long the read is abandoned and the
+   * seed/previous result is served instead.
+   */
+  timeoutMs?: number
   /** Models to advertise while the first read is in flight or after a failure. */
   seed?: readonly CatalogModel[]
   /** Diagnostics. */
@@ -138,6 +147,35 @@ export interface CatalogOptions {
 
 const MODELS_PATH = '/v1/models'
 const DEFAULT_TTL_MS = 5 * 60_000
+const DEFAULT_TIMEOUT_MS = 15_000
+
+/**
+ * Combine the caller's signal with a hard deadline.
+ *
+ * Older runtimes do not ship `AbortSignal.any`, so the deadline is wired by
+ * hand: whichever fires first aborts the request.
+ */
+function withDeadline(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const controller = new AbortController()
+  const timer = setTimeout(() => {
+    controller.abort(new Error(`model catalog request timed out after ${timeoutMs}ms`))
+  }, timeoutMs)
+  timer.unref?.()
+  const onCallerAbort = (): void => controller.abort(signal?.reason)
+  if (signal !== undefined) {
+    if (signal.aborted) controller.abort(signal.reason)
+    else signal.addEventListener('abort', onCallerAbort, { once: true })
+  }
+  controller.signal.addEventListener(
+    'abort',
+    () => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onCallerAbort)
+    },
+    { once: true },
+  )
+  return controller.signal
+}
 
 /**
  * Reads and caches the route's model catalog.
@@ -153,6 +191,11 @@ export class ModelCatalog {
 
   constructor(options: CatalogOptions) {
     this.#options = options
+  }
+
+  /** Whether the current directory was fetched remotely or came from the seed. */
+  get source(): 'remote' | 'fallback' {
+    return this.#cached === undefined ? 'fallback' : 'remote'
   }
 
   /** Last known catalog without any I/O, or the seed when nothing is known. */
@@ -182,7 +225,7 @@ export class ModelCatalog {
       const fetchImpl = this.#options.fetchImpl ?? fetch
       const response = await fetchImpl(`${this.#options.baseUrl ?? 'https://api.openai.com'}${MODELS_PATH}`, {
         headers: { Authorization: `Bearer ${token}` },
-        signal,
+        signal: withDeadline(signal, this.#options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       })
       if (!response.ok) throw new Error(`models request failed with HTTP ${response.status}`)
       const body = (await response.json()) as { models?: unknown }

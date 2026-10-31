@@ -30,3 +30,8 @@
         refreshLeadMs: 300000
         flowId: chatgpt
         flowLabel: ChatGPT
+        # Set gateway values in the local DSH profile, never in this template.
+        gatewayBaseUrl: ''
+        gatewayApiKey: ''
+        gatewayProxy: ''
+        gatewayTimeoutMs: 20000

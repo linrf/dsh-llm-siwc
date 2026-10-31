@@ -15,3 +15,11 @@ node_modules/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Local gateway credentials and request spools
+*.env
+!*.env.example
+*.pem
+*.key
+requests/
+credentials/

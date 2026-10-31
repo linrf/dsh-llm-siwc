@@ -610,6 +610,26 @@ test('a catalog read failure keeps the picker usable instead of emptying it', as
   assert.deepEqual(catalog.snapshot()[0]?.reasoningLevels, ['low', 'medium', 'high'])
 })
 
+test('catalog diagnostics distinguish fallback from a remotely fetched directory', async () => {
+  let fail = true
+  const catalog = new ModelCatalog({
+    resolveAccessToken: async () => 'token',
+    ttlMs: -1,
+    fetchImpl: (async () => {
+      if (fail) throw new Error('gateway unavailable')
+      return new Response(JSON.stringify({ models: [liveEntry('gpt-reserve')] }))
+    }) as typeof fetch,
+  })
+  await catalog.load()
+  assert.equal(catalog.source, 'fallback')
+  fail = false
+  assert.equal((await catalog.load())[0]?.slug, 'gpt-reserve')
+  assert.equal(catalog.source, 'remote')
+  fail = true
+  assert.equal((await catalog.load())[0]?.slug, 'gpt-reserve')
+  assert.equal(catalog.source, 'remote')
+})
+
 test('a stale catalog is not refetched while its TTL holds', async () => {
   let calls = 0
   const catalog = new ModelCatalog({

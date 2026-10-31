@@ -20,6 +20,7 @@ import { LlmAdapter } from '@deepseek-ai/dsh-llm'
 import { credentialKey, type CredentialKey } from '@deepseek-ai/dsh-credentials'
 import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import { join } from 'node:path'
+import { appendFileSync } from 'node:fs'
 
 import {
   SiwcResponsesAdapter,
@@ -97,6 +98,39 @@ export const Config = z.object({
    */
   fastMode: z.boolean().default(false),
   /**
+   * Root URL of a self-hosted siwc gateway (no `/v1` suffix).
+   *
+   * When set, every request (model catalog + Responses) goes to this gateway
+   * instead of `https://api.openai.com`. The gateway owns the ChatGPT OAuth
+   * credential and refreshes it, so this client needs no local credential.
+   * Leave empty for the stock direct-to-OpenAI behavior.
+   */
+  gatewayBaseUrl: z.string().default(''),
+  /**
+   * Bearer token for the self-hosted gateway (`gatewayBaseUrl`).
+   *
+   * Used instead of the stored OAuth access token when set. Empty keeps the
+   * normal ChatGPT sign-in credential path.
+   */
+  gatewayApiKey: z.string().default(''),
+  /**
+   * Deadline for one gateway model-catalog read, in milliseconds.
+   *
+   * The harness builds its model catalog by awaiting every provider, so a
+   * stalled socket would otherwise spin the model picker forever. When the read
+   * exceeds this budget it is abandoned and the built-in fallback catalog keeps
+   * the route usable.
+   */
+  gatewayTimeoutMs: z.natural().min(1000).max(120_000).default(15_000),
+  /**
+   * Proxy URL for gateway traffic, e.g. `http://127.0.0.1:7897`.
+   *
+   * When the direct route to the gateway is slow (mainland network to an
+   * overseas VM) every gateway call can be tunnelled through a local HTTP
+   * CONNECT proxy instead. Empty means a direct connection.
+   */
+  gatewayProxy: z.string().default(''),
+  /**
    * Per-route settings surface.
    *
    * This exists so the Models page lists the route. `dsh-settings` only
@@ -118,9 +152,18 @@ export const Config = z.object({
         displayName: z.string().default('ChatGPT'),
         /** Override the API base URL (self-hosted gateway / tests). */
         baseUrl: z.string().default(''),
+        /**
+         * Bearer token for a self-hosted gateway.
+         *
+         * When set, requests authenticate with this token instead of the
+         * stored ChatGPT OAuth credential: the gateway owns the refresh token
+         * and exchanges it upstream, so no local credential is needed (and
+         * sharing one would fight over refresh-token rotation).
+         */
+        apiKey: z.string().default(''),
       }),
     )
-    .default({ chatgpt: { displayName: 'ChatGPT', baseUrl: '' } })
+    .default({ chatgpt: { displayName: 'ChatGPT', baseUrl: '', apiKey: '' } })
     .volatile(),
 })
 
@@ -134,14 +177,16 @@ function defaultStoreDir(): string {
 /** Harness-facing adapter: extends the real base class and delegates. */
 class HarnessSiwcAdapter extends LlmAdapter {
   readonly #core: SiwcResponsesAdapter
+  readonly #displayName: string
 
-  constructor(core: SiwcResponsesAdapter) {
+  constructor(core: SiwcResponsesAdapter, displayName: string) {
     super()
     this.#core = core
+    this.#displayName = displayName
   }
 
   override providerInfo(provider: string): { id: string; name: string } {
-    return this.#core.providerInfo(provider)
+    return { ...this.#core.providerInfo(provider), name: this.#displayName }
   }
 
   /** Route-owned retry policy: transient failures only, never RATE_LIMIT. */
@@ -168,12 +213,61 @@ export function apply(ctx: Context, config: Config): void {
   // Diagnostics: activation failures in this composition are silent cascades,
   // so the plugin reports what it actually managed to register.
   console.log(`llm-siwc: apply() entered (provider=${config.provider}, models=${config.models.length})`)
+  try {
+    appendFileSync(
+      '/tmp/siwc-plugin-debug.log',
+      JSON.stringify({ stage: 'apply', at: new Date().toISOString(), provider: config.provider, configuredProviders: Object.keys(config.providers ?? {}).length, models: config.models.length }) + '\n',
+    )
+  } catch {
+    // never let diagnostics break activation
+  }
   const settings: SiwcConfig = resolveConfig({
     storeDir: config.storeDir === '' ? defaultStoreDir() : config.storeDir,
     callbackHost: config.callbackHost,
     callbackPort: config.callbackPort,
     refreshLeadMs: config.refreshLeadMs,
   })
+  // Gateway overrides for a self-hosted siwc gateway. The top-level options are
+  // the real switch (the `providers` dict is .volatile() and only feeds the
+  // Models page, so its values never reach this function). `baseUrl` is the
+  // gateway root (no `/v1`): the catalog endpoint already carries the version
+  // while the Responses client wants it appended, so both shapes are derived.
+  const routeSettings = config.providers?.[config.provider]
+  const gatewayRoot =
+    (config.gatewayBaseUrl ?? '').replace(/\/+$/, '') ||
+    (routeSettings?.baseUrl ?? '').replace(/\/+$/, '') ||
+    undefined
+  const gatewayKey = config.gatewayApiKey ?? routeSettings?.apiKey ?? ''
+  const providerDisplayName = gatewayRoot === undefined ? 'ChatGPT' : 'ChatGPT (VM gateway)'
+  const gatewayProxy = (config.gatewayProxy ?? '').trim()
+  const responsesBaseUrl = gatewayRoot === undefined ? undefined : `${gatewayRoot}/v1`
+  // Optional CONNECT proxy for gateway calls. The dispatcher is created lazily
+  // and cached, so the plugin still loads when the option stays empty, and a
+  // proxy failure surfaces as a normal fetch error instead of a load failure.
+  const gatewayFetch: typeof fetch | undefined =
+    gatewayProxy === ''
+      ? undefined
+      : (() => {
+          let clientPromise: Promise<{ dispatcher: unknown; fetchImpl: typeof fetch }> | undefined
+          return (async (input: RequestInfo | URL, init?: RequestInit) => {
+            // Keep fetch and its dispatcher in the same client implementation;
+            // host wrappers around global fetch need not preserve dispatcher.
+            clientPromise ??= import('undici').then((m) => ({
+              dispatcher: new m.ProxyAgent(gatewayProxy),
+              fetchImpl: m.fetch as unknown as typeof fetch,
+            }))
+            const { dispatcher, fetchImpl } = await clientPromise
+            return fetchImpl(input, { ...init, dispatcher } as RequestInit)
+          }) as typeof fetch
+        })()
+  try {
+    appendFileSync(
+      '/tmp/siwc-plugin-debug.log',
+      JSON.stringify({ stage: 'route', gatewayRoot, responsesBaseUrl, keySet: gatewayKey !== '', storeDir: settings.storeDir, timeoutMs: config.gatewayTimeoutMs, proxySet: gatewayProxy !== '' }) + '\n',
+    )
+  } catch {
+    // never let diagnostics break activation
+  }
   const store: CredentialStore = new FileCredentialStore(settings.storeDir)
   const hostIdPath = join(settings.storeDir, 'host_id')
   // Best effort: a host id that cannot be persisted must not fail activation.
@@ -187,6 +281,8 @@ export function apply(ctx: Context, config: Config): void {
   // cascade into unrelated rows (agent presets, tools) failing to start.
   // Token resolution is shared by the adapter and the model catalog.
   const resolveAccessToken = async (provider: string): Promise<string> => {
+    // A gateway owns the OAuth credential; authenticate with its bearer token.
+    if (gatewayKey !== '') return gatewayKey
     const credential = await pickCredential(store, provider)
     if (!credential) {
       throw new Error(
@@ -206,6 +302,9 @@ export function apply(ctx: Context, config: Config): void {
   // models the account can use and advertises reasoning levels it rejects.
   const catalog = new ModelCatalog({
     resolveAccessToken: () => resolveAccessToken(config.provider),
+    ...(gatewayRoot === undefined ? {} : { baseUrl: gatewayRoot }),
+    ...(gatewayFetch === undefined ? {} : { fetchImpl: gatewayFetch }),
+    timeoutMs: config.gatewayTimeoutMs,
     seed: FALLBACK_CATALOG,
     onError: (error) => console.error('llm-siwc: could not read the model catalog:', error),
   })
@@ -213,12 +312,30 @@ export function apply(ctx: Context, config: Config): void {
   // Both outcomes are handled: the harness treats an unhandled rejection as a
   // fatal load failure and exits the application, and a stale credential must
   // never be able to do that.
+  const catalogStartAt = Date.now()
   void catalog.load().then(
     (models) => {
-      console.log(`llm-siwc: model catalog ready (${models.length} models)`)
+      const source = catalog.source === 'fallback' ? 'fallback' : gatewayRoot === undefined ? 'direct' : 'gateway'
+      console.log(`llm-siwc: model catalog available (${models.length} models, source=${source})`)
+      try {
+        appendFileSync(
+          '/tmp/siwc-plugin-debug.log',
+          JSON.stringify({ stage: 'catalog', ok: source !== 'fallback', source, models: models.length, ms: Date.now() - catalogStartAt, viaGateway: gatewayRoot !== undefined }) + '\n',
+        )
+      } catch {
+        // diagnostics only
+      }
     },
     (error: unknown) => {
       console.error('llm-siwc: model catalog prewarm failed:', error)
+      try {
+        appendFileSync(
+          '/tmp/siwc-plugin-debug.log',
+          JSON.stringify({ stage: 'catalog', ok: false, ms: Date.now() - catalogStartAt, viaGateway: gatewayRoot !== undefined, error: String(error) }) + '\n',
+        )
+      } catch {
+        // diagnostics only
+      }
     },
   )
 
@@ -227,6 +344,8 @@ export function apply(ctx: Context, config: Config): void {
     models: config.models,
     resolveAccessToken,
     catalog,
+    ...(responsesBaseUrl === undefined ? {} : { baseUrl: responsesBaseUrl }),
+    ...(gatewayFetch === undefined ? {} : { fetchImpl: gatewayFetch }),
     reasoningSummary: config.reasoningSummary,
     serviceTier: config.fastMode ? 'priority' : undefined,
     // Image bytes are never in the session log, so each referenced attachment
@@ -252,7 +371,7 @@ export function apply(ctx: Context, config: Config): void {
     },
   })
   try {
-    ctx.llm.registerAdapter([config.provider], new HarnessSiwcAdapter(core))
+    ctx.llm.registerAdapter([config.provider], new HarnessSiwcAdapter(core, providerDisplayName))
     console.log(`llm-siwc: LLM route "${config.provider}" registered`)
   } catch (error) {
     console.error(`llm-siwc: could not register the "${config.provider}" route:`, error)
@@ -269,7 +388,7 @@ export function apply(ctx: Context, config: Config): void {
     ctx.llm.registerConfigurableProviders([
       {
         provider: config.provider,
-        displayName: 'ChatGPT',
+        displayName: providerDisplayName,
         settingsNs,
         settingsPath: ['providers', config.provider],
       },

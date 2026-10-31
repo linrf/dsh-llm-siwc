@@ -29,7 +29,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "test:gateway": "node --test gateway/siwc-gateway-v2.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"
@@ -55,5 +56,8 @@
   "bugs": {
     "url": "https://github.com/linrf/dsh-llm-siwc/issues"
   },
-  "homepage": "https://github.com/linrf/dsh-llm-siwc#readme"
+  "homepage": "https://github.com/linrf/dsh-llm-siwc#readme",
+  "dependencies": {
+    "undici": "^6.21.3"
+  }
 }

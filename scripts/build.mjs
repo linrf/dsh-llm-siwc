@@ -8,7 +8,9 @@
  *
  * `index.js` dynamically imports `./main.js`, which is kept external so the
  * body is evaluated only after the resolve hook exists. Every local module is
- * inlined; only `@deepseek-ai/*` stays external (provided by the DSH runtime).
+ * inlined; `@deepseek-ai/*` stays external (provided by the DSH runtime) and so
+ * does `undici` (an npm dependency the plugin loads at runtime only when a
+ * gateway proxy is configured).
  */
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
@@ -21,7 +23,10 @@ const shared = {
   platform: 'node',
   target: 'node22',
   sourcemap: false,
-  external: ['@deepseek-ai/*'],
+  // `undici` stays external: it is a real dependency of the plugin (installed
+  // next to it), and bundling it into an ESM output breaks because its CJS
+  // internals `require()` node builtins, which an ESM bundle cannot satisfy.
+  external: ['@deepseek-ai/*', 'undici'],
   logLevel: 'warning',
 }
 

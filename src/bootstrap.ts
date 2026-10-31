@@ -105,6 +105,10 @@ async function discoverHostRoot(): Promise<string | null> {
 }
 
 let installed = false
+// createRequire().resolve() also runs synchronous resolution hooks. A second
+// loaded copy of this bootstrap can send that nested lookup back through us.
+// Delegate nested lookups so the host resolver can finish without recursion.
+let resolvingPeer = false
 
 /**
  * Discover the host installation, then install the resolve hook.
@@ -124,12 +128,14 @@ export async function initPeerResolution(): Promise<void> {
 
   registerHooks({
     resolve(specifier, context, nextResolve) {
+      if (resolvingPeer) return nextResolve(specifier, context)
       if (!specifier.startsWith(SCOPE)) return nextResolve(specifier, context)
       // Never claim packages the harness loads for itself.
       if (!PEER_PACKAGES.has(packageNameOf(specifier))) return nextResolve(specifier, context)
       const root = hostRoot
       if (root === null) return nextResolve(specifier, context)
       try {
+        resolvingPeer = true
         // Let node read the package manifest: `exports`/`main` decide the entry.
         const resolved = createRequire(join(root, 'package.json')).resolve(specifier)
         const url = isAbsolute(resolved)
@@ -138,6 +144,8 @@ export async function initPeerResolution(): Promise<void> {
         return { url, shortCircuit: true }
       } catch {
         return nextResolve(specifier, context)
+      } finally {
+        resolvingPeer = false
       }
     },
   })
