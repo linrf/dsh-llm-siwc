@@ -1,0 +1,731 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-10-31T20:56:07.494917+00:00",
+  "sessionId": "session-22ba9e94-c1cf-4056-86f4-cfb3bf6c29d7",
+  "workspace": "/Users/bytedance/GitHub/dsh-llm-siwc",
+  "source": {
+    "kind": "canonical session.v4.jsonl.zstd and version7 projection cache",
+    "lastEventSeq": 174,
+    "canonicalCompressedBytes": 214213,
+    "canonicalSha256": "2eca1c36a088b8fdf07c03010a1572a9bb5d2a0443b043698d16113ccf175086"
+  },
+  "runtimeAttestation": {
+    "pluginMainJsSha256": "4e189f00a4c518c513ce69fc10c8a33b8da540c08352af9de3bc2a3dbd647ec2",
+    "source": "root verified profile link and loaded build"
+  },
+  "comparison": {
+    "beforeSessionId": "session-8cb7ab51-4a24-43bc-ae33-27cf9f03ccce",
+    "initialHumanContentSha256": "8fcb57778a7e4e742b74158e229a4e88f2365c3d32a4f432e8bf99c751b464dd",
+    "beforeInitialHumanContentSha256": "8fcb57778a7e4e742b74158e229a4e88f2365c3d32a4f432e8bf99c751b464dd",
+    "sameInitialHumanContent": true,
+    "sameWorkspaceModelAndEffort": true,
+    "dynamicSystemContextHeldConstant": false,
+    "beforeEvidence": "gateway-2.3.0-dsh-first-turn-before.json"
+  },
+  "modelSelection": {
+    "lastUsed": {
+      "provider": "chatgpt",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "low"
+    },
+    "pending": null
+  },
+  "requestConfigs": [
+    {
+      "provider": "chatgpt",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "low",
+      "maxTokens": 128000
+    }
+  ],
+  "turns": [
+    {
+      "turn": 1,
+      "startedAtUtc": "2026-10-31T20:46:48.065000+00:00",
+      "durationMs": 71324,
+      "endReason": {
+        "kind": "completed"
+      },
+      "expectedInterruption": false,
+      "steps": 5,
+      "usageTotals": {
+        "inputTokens": 67354,
+        "outputTokens": 1745,
+        "totalTokens": 268139,
+        "cacheReadTokens": 199040,
+        "reasoningTokens": 26
+      },
+      "cacheHitRate": 0.747164,
+      "toolCalls": 4,
+      "toolResults": 4,
+      "missingUsageOrFinishExpected": false
+    },
+    {
+      "turn": 2,
+      "startedAtUtc": "2026-10-31T20:48:37.892000+00:00",
+      "durationMs": 47520,
+      "endReason": {
+        "kind": "completed"
+      },
+      "expectedInterruption": false,
+      "steps": 4,
+      "usageTotals": {
+        "inputTokens": 9751,
+        "outputTokens": 983,
+        "totalTokens": 289390,
+        "cacheReadTokens": 278656
+      },
+      "cacheHitRate": 0.96619,
+      "toolCalls": 3,
+      "toolResults": 3,
+      "missingUsageOrFinishExpected": false
+    },
+    {
+      "turn": 3,
+      "startedAtUtc": "2026-10-31T20:51:09.651000+00:00",
+      "durationMs": 19053,
+      "endReason": {
+        "kind": "aborted",
+        "reason": {
+          "kind": "user"
+        }
+      },
+      "expectedInterruption": true,
+      "steps": 1,
+      "usageTotals": {},
+      "cacheHitRate": null,
+      "toolCalls": 0,
+      "toolResults": 0,
+      "missingUsageOrFinishExpected": true
+    },
+    {
+      "turn": 4,
+      "startedAtUtc": "2026-10-31T20:52:17.880000+00:00",
+      "durationMs": 28494,
+      "endReason": {
+        "kind": "completed"
+      },
+      "expectedInterruption": false,
+      "steps": 2,
+      "usageTotals": {
+        "inputTokens": 3173,
+        "outputTokens": 723,
+        "totalTokens": 157752,
+        "cacheReadTokens": 153856
+      },
+      "cacheHitRate": 0.979794,
+      "toolCalls": 1,
+      "toolResults": 1,
+      "missingUsageOrFinishExpected": false
+    }
+  ],
+  "steps": [
+    {
+      "turn": 1,
+      "step": 1,
+      "assistantMessageSeq": 19,
+      "contentTypes": [
+        "text",
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        },
+        {
+          "index": 1,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 31333,
+        "outputTokens": 195,
+        "totalTokens": 31528
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 1,
+      "step": 2,
+      "assistantMessageSeq": 40,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 14307,
+        "outputTokens": 226,
+        "totalTokens": 45765,
+        "cacheReadTokens": 31232
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 1,
+      "step": 3,
+      "assistantMessageSeq": 59,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 12967,
+        "outputTokens": 218,
+        "totalTokens": 58625,
+        "cacheReadTokens": 45440
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 1,
+      "step": 4,
+      "assistantMessageSeq": 80,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 6036,
+        "outputTokens": 189,
+        "totalTokens": 64465,
+        "cacheReadTokens": 58240,
+        "reasoningTokens": 26
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 1,
+      "step": 5,
+      "assistantMessageSeq": 93,
+      "contentTypes": [
+        "text"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 2711,
+        "outputTokens": 917,
+        "totalTokens": 67756,
+        "cacheReadTokens": 64128
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 0,
+        "materializedCalls": 0,
+        "dispatchedCalls": 0,
+        "toolResults": 0,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": []
+      }
+    },
+    {
+      "turn": 2,
+      "step": 1,
+      "assistantMessageSeq": 102,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 1296,
+        "outputTokens": 105,
+        "totalTokens": 68089,
+        "cacheReadTokens": 66688
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 2,
+      "step": 2,
+      "assistantMessageSeq": 113,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 2920,
+        "outputTokens": 209,
+        "totalTokens": 70969,
+        "cacheReadTokens": 67840
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 2,
+      "step": 3,
+      "assistantMessageSeq": 129,
+      "contentTypes": [
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 2942,
+        "outputTokens": 128,
+        "totalTokens": 73726,
+        "cacheReadTokens": 70656
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 2,
+      "step": 4,
+      "assistantMessageSeq": 140,
+      "contentTypes": [
+        "text"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 2593,
+        "outputTokens": 541,
+        "totalTokens": 76606,
+        "cacheReadTokens": 73472
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 0,
+        "materializedCalls": 0,
+        "dispatchedCalls": 0,
+        "toolResults": 0,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": []
+      }
+    },
+    {
+      "turn": 3,
+      "step": 1,
+      "assistantMessageSeq": 151,
+      "contentTypes": [
+        "text"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [],
+      "usage": null,
+      "expectedInterruption": true,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 0,
+        "materializedCalls": 0,
+        "dispatchedCalls": 0,
+        "toolResults": 0,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": []
+      }
+    },
+    {
+      "turn": 4,
+      "step": 1,
+      "assistantMessageSeq": 160,
+      "contentTypes": [
+        "text",
+        "tool-call"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        },
+        {
+          "index": 1,
+          "blockType": "tool-call"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 890,
+        "outputTokens": 222,
+        "totalTokens": 77656,
+        "cacheReadTokens": 76544
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 1,
+        "materializedCalls": 1,
+        "dispatchedCalls": 1,
+        "toolResults": 1,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": [
+          "run_code"
+        ]
+      }
+    },
+    {
+      "turn": 4,
+      "step": 2,
+      "assistantMessageSeq": 171,
+      "contentTypes": [
+        "text"
+      ],
+      "blockStarts": [
+        {
+          "index": 0,
+          "blockType": "text"
+        }
+      ],
+      "hasReusedBlockIndex": false,
+      "finishReasons": [
+        "stop"
+      ],
+      "usage": {
+        "inputTokens": 2283,
+        "outputTokens": 501,
+        "totalTokens": 80096,
+        "cacheReadTokens": 77312
+      },
+      "expectedInterruption": false,
+      "stepEndObserved": true,
+      "toolIdPairing": {
+        "streamCalls": 0,
+        "materializedCalls": 0,
+        "dispatchedCalls": 0,
+        "toolResults": 0,
+        "streamToMessageUnmatched": 0,
+        "messageToDispatchUnmatched": 0,
+        "dispatchToResultUnmatched": 0,
+        "allFourStageIdSetsEqual": true,
+        "toolNames": []
+      }
+    }
+  ],
+  "toolExecution": {
+    "rootCalls": 8,
+    "rootResults": 8,
+    "ptcDispatchStarts": 37,
+    "ptcDispatchResults": 37,
+    "ptcCountsByName": {
+      "bash": 3,
+      "read": 31,
+      "grep": 2,
+      "job_output": 1
+    },
+    "toolValidationOrExecutionErrors": [],
+    "toolErrorsAreSeparateFromModelTransportFailures": true
+  },
+  "actualTestResults": [
+    {
+      "scope": "plugin regression",
+      "resultEventSeq": 109,
+      "toolName": "bash",
+      "counts": {
+        "tests": 44,
+        "pass": 44,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "observedExitCodes": [
+        0
+      ],
+      "jobSettledEvidence": [
+        {
+          "eventSeq": 108,
+          "status": "completed",
+          "exitCodes": [
+            0
+          ]
+        }
+      ],
+      "source": "actual PTC result and producer job/settled; not assistant self-report"
+    },
+    {
+      "scope": "selected gateway loopback",
+      "resultEventSeq": 132,
+      "toolName": "job_output",
+      "counts": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0
+      },
+      "observedExitCodes": [
+        0
+      ],
+      "jobSettledEvidence": [
+        {
+          "eventSeq": 127,
+          "status": "completed",
+          "exitCodes": [
+            0
+          ]
+        }
+      ],
+      "source": "actual PTC result and producer job/settled; not assistant self-report"
+    }
+  ],
+  "projectionReadback": {
+    "sessionStats": {
+      "turns": 4,
+      "steps": 12,
+      "llmMs": 163089,
+      "toolMs": 2865,
+      "ttftMs": 45386,
+      "ttftSteps": 12,
+      "decodeMs": 103155,
+      "decodeTokens": 3451,
+      "lastTurn": 4,
+      "openStep": null,
+      "pendingCalls": {}
+    },
+    "turnBoundary": {
+      "openTurnStartSeq": null,
+      "lastStepStartSeq": 170,
+      "lastStepBoundary": {
+        "kind": "end",
+        "seq": 172
+      },
+      "lastTurn": 4
+    },
+    "tokenUsage": {
+      "totals": {
+        "uncachedInputTokens": 80278,
+        "outputTokens": 3451,
+        "cacheReadTokens": 631552,
+        "cacheWriteTokens": 0
+      },
+      "last": {
+        "turn": 4,
+        "step": 2,
+        "buckets": {
+          "uncachedInputTokens": 2283,
+          "outputTokens": 501,
+          "cacheReadTokens": 77312,
+          "cacheWriteTokens": 0
+        }
+      }
+    }
+  },
+  "uiReadback": {
+    "source": "root CUA verification",
+    "finalAnswerContentVerified": true,
+    "trajectoryTabMultiTurnToolsVerified": true,
+    "turns": 4,
+    "steps": 12,
+    "displayedTokens": "715K",
+    "displayedCacheHitRate": "89%",
+    "displayedContextUsed": "16%"
+  },
+  "vmEvidence": "gateway-2.3.0-dsh-vm.json",
+  "checks": {
+    "fourTurnsObserved": true,
+    "normalTurnsCompleted": true,
+    "expectedUserAbort": true,
+    "allToolIdsPairedAcrossFourStages": true,
+    "noBlockIndexReuse": true,
+    "allStepsEnded": true,
+    "completedStepsHaveFinish": true,
+    "noOpenTurn": true,
+    "noOpenStep": true,
+    "noPendingCalls": true,
+    "actualTestsPassed": true,
+    "sameInitialHumanPrompt": true
+  },
+  "canonicalAcceptancePassed": true,
+  "scopeLimits": [
+    "Only these four actual DSH turns: code review, real loopback tests, user cancellation and continuation.",
+    "Missing finish/usage in turn3 is expected from user cancellation.",
+    "Adapter finish stop is also used for tool-call steps; four-stage IDs are checked instead of relying on finish alone.",
+    "VM request count includes auxiliary requests and is not equal to main-session step count.",
+    "No 30MiB real-model context inference or long-term stability claim."
+  ],
+  "privacy": "No prompts, assistant/source text, tool arguments, raw tool call IDs or credentials retained."
+}

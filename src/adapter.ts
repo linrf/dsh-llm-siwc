@@ -162,6 +162,41 @@ interface ToolBlock {
   arguments: string
 }
 
+interface TextStreamBlock {
+  index: number
+  text: string
+  closed: boolean
+}
+
+interface ToolStreamBlock {
+  index: number
+  block: ToolBlock
+  closed: boolean
+}
+
+interface TranslationState {
+  textBlocks: Map<string, TextStreamBlock>
+  reasoningBlocks: Map<string, TextStreamBlock>
+  /** Both native item IDs and tool call IDs resolve to the same block. */
+  toolBlocks: Map<string, ToolStreamBlock>
+  nextIndex: () => number
+}
+
+// Responses indexes address output items/content parts. Harness indexes address
+// all content blocks in one shared namespace, so they must be allocated here.
+function textPartKey(event: ResponsesEvent): string {
+  const output = typeof event.output_index === 'number' ? event.output_index : 0
+  const content = typeof event.content_index === 'number' ? event.content_index : 0
+  return `${output}:${content}`
+}
+
+function reasoningPartKey(event: ResponsesEvent): string {
+  const output = typeof event.output_index === 'number' ? event.output_index : 0
+  const summary = event.type.startsWith('response.reasoning_summary_')
+  const part = summary ? event.summary_index : event.content_index
+  return `${output}:${summary ? 'summary' : 'text'}:${typeof part === 'number' ? part : 0}`
+}
+
 /**
  * Adapter for one or more ChatGPT-plan provider routes.
  *
@@ -284,8 +319,12 @@ export class SiwcResponsesAdapter {
     const tools = convertTools(options.tools)
 
     let index = 0
-    const toolBlocks = new Map<string, { index: number; block: ToolBlock }>()
-    const textBlocks = new Set<number>()
+    const state: TranslationState = {
+      textBlocks: new Map(),
+      reasoningBlocks: new Map(),
+      toolBlocks: new Map(),
+      nextIndex: () => index++,
+    }
     let finished = false
 
     const events = streamResponses(
@@ -306,11 +345,7 @@ export class SiwcResponsesAdapter {
 
     try {
       for await (const event of events) {
-        for (const chunk of this.#translate(event, {
-          textBlocks,
-          toolBlocks,
-          nextIndex: () => index++,
-        })) {
+        for (const chunk of this.#translate(event, state)) {
           if (chunk.type === 'finish') finished = true
           yield chunk
         }
@@ -385,22 +420,22 @@ export class SiwcResponsesAdapter {
   /** Translate one Responses event into zero or more harness chunks. */
   *#translate(
     event: ResponsesEvent,
-    state: {
-      textBlocks: Set<number>
-      toolBlocks: Map<string, { index: number; block: ToolBlock }>
-      nextIndex: () => number
-    },
+    state: TranslationState,
   ): Generator<StreamChunk> {
     switch (event.type) {
       case 'response.output_text.delta': {
         const text = typeof event.delta === 'string' ? event.delta : ''
         if (text === '') return
-        const itemIndex = typeof event.output_index === 'number' ? event.output_index : 0
-        if (!state.textBlocks.has(itemIndex)) {
-          state.textBlocks.add(itemIndex)
-          yield { type: 'block-start', index: itemIndex, blockType: 'text' }
+        const key = textPartKey(event)
+        let entry = state.textBlocks.get(key)
+        if (!entry) {
+          entry = { index: state.nextIndex(), text: '', closed: false }
+          state.textBlocks.set(key, entry)
+          yield { type: 'block-start', index: entry.index, blockType: 'text' }
         }
-        yield { type: 'text-delta', index: itemIndex, text }
+        if (entry.closed) return
+        entry.text += text
+        yield { type: 'text-delta', index: entry.index, text }
         return
       }
 
@@ -408,7 +443,26 @@ export class SiwcResponsesAdapter {
       case 'response.reasoning_text.delta': {
         const text = typeof event.delta === 'string' ? event.delta : ''
         if (text === '') return
-        yield { type: 'reasoning-delta', index: this.#reasoningIndex(state), text }
+        const key = reasoningPartKey(event)
+        let entry = state.reasoningBlocks.get(key)
+        if (!entry) {
+          entry = { index: state.nextIndex(), text: '', closed: false }
+          state.reasoningBlocks.set(key, entry)
+          yield { type: 'block-start', index: entry.index, blockType: 'reasoning' }
+        }
+        if (entry.closed) return
+        entry.text += text
+        yield { type: 'reasoning-delta', index: entry.index, text }
+        return
+      }
+
+      case 'response.reasoning_summary_text.done':
+      case 'response.reasoning_text.done': {
+        const entry = state.reasoningBlocks.get(reasoningPartKey(event))
+        if (!entry || entry.closed) return
+        entry.closed = true
+        const text = typeof event.text === 'string' ? event.text : entry.text
+        yield { type: 'block-end', index: entry.index, block: { type: 'reasoning', text } }
         return
       }
 
@@ -416,10 +470,16 @@ export class SiwcResponsesAdapter {
         const item = event.item as Record<string, unknown> | undefined
         if (item?.type !== 'function_call') return
         const callId = String(item.call_id ?? item.id ?? '')
+        const itemId = typeof item.id === 'string' ? item.id : ''
+        const existing = (itemId ? state.toolBlocks.get(`item:${itemId}`) : undefined)
+          ?? state.toolBlocks.get(`call:${callId}`)
+        if (existing) return
         const name = typeof item.name === 'string' ? item.name : ''
         const blockIndex = state.nextIndex()
         const block: ToolBlock = { id: callId, name, arguments: '' }
-        state.toolBlocks.set(callId, { index: blockIndex, block })
+        const entry = { index: blockIndex, block, closed: false }
+        if (itemId) state.toolBlocks.set(`item:${itemId}`, entry)
+        state.toolBlocks.set(`call:${callId}`, entry)
         yield { type: 'block-start', index: blockIndex, blockType: 'tool-call' }
         yield {
           type: 'tool-call-delta',
@@ -432,9 +492,11 @@ export class SiwcResponsesAdapter {
       }
 
       case 'response.function_call_arguments.delta': {
-        const callId = typeof event.item_id === 'string' ? event.item_id : ''
-        const entry = state.toolBlocks.get(callId)
-        if (!entry) return
+        const itemId = typeof event.item_id === 'string' ? event.item_id : ''
+        // Native deltas name item.id (fc_*), not the tool's call_id (call_*).
+        // The alias also accepts older payloads that used call_id here.
+        const entry = state.toolBlocks.get(`item:${itemId}`) ?? state.toolBlocks.get(`call:${itemId}`)
+        if (!entry || entry.closed) return
         const delta = typeof event.delta === 'string' ? event.delta : ''
         entry.block.arguments += delta
         if (delta !== '') {
@@ -452,8 +514,12 @@ export class SiwcResponsesAdapter {
         const item = event.item as Record<string, unknown> | undefined
         if (item?.type !== 'function_call') return
         const callId = String(item.call_id ?? item.id ?? '')
-        const entry = state.toolBlocks.get(callId)
-        if (!entry) return
+        const itemId = typeof item.id === 'string' ? item.id : ''
+        const entry = (itemId ? state.toolBlocks.get(`item:${itemId}`) : undefined)
+          ?? state.toolBlocks.get(`call:${callId}`)
+        if (!entry || entry.closed) return
+        entry.closed = true
+        if (typeof item.call_id === 'string' && item.call_id !== '') entry.block.id = item.call_id
         const finalArguments =
           typeof item.arguments === 'string' && item.arguments !== ''
             ? item.arguments
@@ -468,16 +534,15 @@ export class SiwcResponsesAdapter {
             arguments: finalArguments,
           },
         }
-        state.toolBlocks.delete(callId)
         return
       }
 
       case 'response.output_text.done': {
-        const itemIndex = typeof event.output_index === 'number' ? event.output_index : 0
-        if (!state.textBlocks.has(itemIndex)) return
-        const text = typeof event.text === 'string' ? event.text : ''
-        yield { type: 'block-end', index: itemIndex, block: { type: 'text', text } }
-        state.textBlocks.delete(itemIndex)
+        const entry = state.textBlocks.get(textPartKey(event))
+        if (!entry || entry.closed) return
+        entry.closed = true
+        const text = typeof event.text === 'string' ? event.text : entry.text
+        yield { type: 'block-end', index: entry.index, block: { type: 'text', text } }
         return
       }
 
@@ -505,11 +570,6 @@ export class SiwcResponsesAdapter {
       default:
         return
     }
-  }
-
-  #reasoningIndex(state: { textBlocks: Set<number> }): number {
-    // Reasoning precedes text; keep it on its own stable index.
-    return state.textBlocks.size === 0 ? 0 : -1
   }
 
   #finishReason(response: Record<string, unknown> | undefined): string {

@@ -1,0 +1,56 @@
+
+> dsh-llm-siwc@0.1.0 test
+> node --test test/*.test.ts
+
+✔ a leading system message becomes instructions, never an input item (0.535ms)
+✔ a one-shot system string merges with system messages (0.054042ms)
+✔ developer messages are lifted like system messages (0.039125ms)
+✔ user text becomes an input_text part (0.324167ms)
+✔ assistant tool calls become function_call items (0.057125ms)
+✔ an assistant tool call paired with its result stays ordered (0.052875ms)
+✔ tool results become function_call_output items keyed by call id (0.056ms)
+✔ a full assistant-tool-user round trip keeps order (0.063459ms)
+✔ empty content produces no empty input items (0.052125ms)
+✔ tool schemas convert to Responses function tools (0.113291ms)
+✔ nameless tools are dropped and an empty list is undefined (0.04225ms)
+✔ SSE data frames are parsed and [DONE] dropped (1.68225ms)
+✔ a frame split across chunks is reassembled (0.129417ms)
+✔ a malformed frame does not abort the stream (0.202917ms)
+✔ text deltas map to block-start + text-delta + block-end + finish (9.63825ms)
+✔ a function call maps to a tool-call block with streamed arguments (0.24525ms)
+✔ a stream without a terminal event is an error, not a silent success (0.293875ms)
+✔ the request body carries store:false, stream:true and no rejected fields (0.627791ms)
+✔ session cache routing stays stable across requests and separate across sessions (0.8335ms)
+✔ a 429 with a usage-limit code surfaces a classified pause action (0.575875ms)
+✔ usage is converted to the harness shape (camelCase, disjoint input) (0.114875ms)
+✔ a usage object with missing counts still yields finite numbers (0.096334ms)
+✔ an image block with a resolved data URL becomes input_image (0.038083ms)
+✔ an unresolved image block degrades to a placeholder, not a dropped turn (0.035458ms)
+✔ the selected reasoning effort reaches the request body (0.0785ms)
+✔ reasoning effort "off" omits the field entirely (0.062916ms)
+✔ the route refuses to retry a usage-limit 429 (0.030125ms)
+✔ resolved model metadata advertises reasoning, context, and max tokens (0.070833ms)
+✔ the catalog reads the route's real fields, not a hardcoded list (0.311375ms)
+✔ per-model reasoning levels survive, including xhigh/max/ultra (0.101167ms)
+✔ resolveModel publishes exactly the levels that model accepts (0.111834ms)
+✔ listModels advertises the live catalog with display names (0.107542ms)
+✔ a catalog read failure keeps the picker usable instead of emptying it (0.053125ms)
+✔ catalog diagnostics distinguish fallback from a remotely fetched directory (0.113ms)
+✔ a stale catalog is not refetched while its TTL holds (0.085ms)
+✔ a reasoning summary is requested, so the thinking stream has content (0.083042ms)
+✔ reasoningSummary "none" keeps the request to the bare effort (0.083416ms)
+✔ a failed refresh does not become an unhandled rejection (56.793167ms)
+✔ a fresh sign-in wins even when the stale credential comes first (1.242917ms)
+✔ Fast mode sends service_tier=priority (0.225542ms)
+✔ Fast mode is off by default, so the field is absent (0.092958ms)
+✔ a first-turn preamble followed by a tool survives first-close-wins assembly (0.217542ms)
+✔ reasoning, text parts and parallel tools share one collision-free index namespace (0.305292ms)
+✔ legacy call-id argument deltas remain compatible and closed blocks ignore stragglers (0.147625ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 146.787834

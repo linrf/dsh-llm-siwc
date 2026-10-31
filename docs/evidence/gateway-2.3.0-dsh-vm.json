@@ -1,0 +1,475 @@
+{
+  "scope": "Gateway test time window; includes DSH auxiliary/title requests, not a strict one-to-one count of primary session steps",
+  "health": {
+    "ok": true,
+    "version": "2.3.0",
+    "upstream": "https://api.openai.com/v1",
+    "accessTokenExpiresAt": "2026-10-31T21:05:56.182Z",
+    "modelsCached": "2026-10-31T20:51:09.088Z",
+    "inflight": 0
+  },
+  "sourceSha256": {
+    "siwc-gateway.mjs": "7d71fa76a83cd544fe18553138565688e045a07415952c195e942b1e18cc4398",
+    "streaming-json.mjs": "751eb942efb674f522550ba293dba1ec22200a3f964351c2ad4ac8f3897ec666"
+  },
+  "unit": {
+    "NRestarts": "0",
+    "MemoryPeak": "143327232",
+    "MemoryMax": "536870912",
+    "MemorySwapMax": "0",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "cgroupMemoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "metrics": {
+    "siwc_gateway_inflight_requests": 0.0,
+    "siwc_gateway_queued_requests": 0.0,
+    "siwc_gateway_normalizer_active": 0.0,
+    "siwc_gateway_upload_active": 0.0,
+    "siwc_gateway_upload_queued": 0.0,
+    "siwc_gateway_upstream_uploads_active": 0.0,
+    "siwc_gateway_spool_reserved_bytes": 0.0,
+    "siwc_gateway_spool_directories": 0.0,
+    "siwc_gateway_active_streams": 0.0
+  },
+  "productionSpoolEntries": 0,
+  "summary": {
+    "preparedRequests": 17,
+    "largestDecodedBytes": 319524,
+    "upstreamStatusCounts": {
+      "200": 17
+    },
+    "completedStreams": 16,
+    "clientDisconnectedRequests": [
+      "26552d5d"
+    ],
+    "failures": []
+  },
+  "logs": [
+    {
+      "ts": "2026-10-31T20:46:48.629Z",
+      "event": "request-prepared",
+      "reqId": "963b2403",
+      "encoding": "identity",
+      "wireBytes": 1832,
+      "decodedBytes": 1832,
+      "normalizedBytes": 1832,
+      "uploadMs": 5
+    },
+    {
+      "ts": "2026-10-31T20:46:48.978Z",
+      "event": "request-prepared",
+      "reqId": "8826cc10",
+      "encoding": "identity",
+      "wireBytes": 137465,
+      "decodedBytes": 137465,
+      "normalizedBytes": 137465,
+      "uploadMs": 313
+    },
+    {
+      "ts": "2026-10-31T20:46:50.690Z",
+      "event": "upstream-opened",
+      "reqId": "8826cc10",
+      "status": 200,
+      "connectMs": 2026,
+      "normalizedBytes": 137465,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:46:51.295Z",
+      "event": "upstream-opened",
+      "reqId": "963b2403",
+      "status": 200,
+      "connectMs": 2673,
+      "normalizedBytes": 1832,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:46:52.658Z",
+      "event": "stream-complete",
+      "reqId": "963b2403",
+      "ms": 4036
+    },
+    {
+      "ts": "2026-10-31T20:46:57.462Z",
+      "event": "stream-complete",
+      "reqId": "8826cc10",
+      "ms": 8798
+    },
+    {
+      "ts": "2026-10-31T20:46:58.036Z",
+      "event": "request-prepared",
+      "reqId": "c1eb8707",
+      "encoding": "identity",
+      "wireBytes": 186243,
+      "decodedBytes": 186243,
+      "normalizedBytes": 186243,
+      "uploadMs": 61
+    },
+    {
+      "ts": "2026-10-31T20:46:59.866Z",
+      "event": "upstream-opened",
+      "reqId": "c1eb8707",
+      "status": 200,
+      "connectMs": 1894,
+      "normalizedBytes": 186243,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:47:08.426Z",
+      "event": "stream-complete",
+      "reqId": "c1eb8707",
+      "ms": 10454
+    },
+    {
+      "ts": "2026-10-31T20:47:08.972Z",
+      "event": "request-prepared",
+      "reqId": "b54f2bb3",
+      "encoding": "identity",
+      "wireBytes": 238359,
+      "decodedBytes": 238359,
+      "normalizedBytes": 238359,
+      "uploadMs": 49
+    },
+    {
+      "ts": "2026-10-31T20:47:11.319Z",
+      "event": "upstream-opened",
+      "reqId": "b54f2bb3",
+      "status": 200,
+      "connectMs": 2397,
+      "normalizedBytes": 238359,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:47:18.777Z",
+      "event": "stream-complete",
+      "reqId": "b54f2bb3",
+      "ms": 9855
+    },
+    {
+      "ts": "2026-10-31T20:47:19.395Z",
+      "event": "request-prepared",
+      "reqId": "897a1ccd",
+      "encoding": "identity",
+      "wireBytes": 261988,
+      "decodedBytes": 261988,
+      "normalizedBytes": 261988,
+      "uploadMs": 45
+    },
+    {
+      "ts": "2026-10-31T20:47:21.616Z",
+      "event": "upstream-opened",
+      "reqId": "897a1ccd",
+      "status": 200,
+      "connectMs": 2267,
+      "normalizedBytes": 261988,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:47:28.613Z",
+      "event": "stream-complete",
+      "reqId": "897a1ccd",
+      "ms": 9264
+    },
+    {
+      "ts": "2026-10-31T20:47:29.014Z",
+      "event": "request-prepared",
+      "reqId": "0f504283",
+      "encoding": "identity",
+      "wireBytes": 272373,
+      "decodedBytes": 272373,
+      "normalizedBytes": 272373,
+      "uploadMs": 17
+    },
+    {
+      "ts": "2026-10-31T20:47:30.630Z",
+      "event": "upstream-opened",
+      "reqId": "0f504283",
+      "status": 200,
+      "connectMs": 1635,
+      "normalizedBytes": 272373,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:47:59.199Z",
+      "event": "stream-complete",
+      "reqId": "0f504283",
+      "ms": 30204
+    },
+    {
+      "ts": "2026-10-31T20:48:38.407Z",
+      "event": "request-prepared",
+      "reqId": "5062dfdf",
+      "encoding": "identity",
+      "wireBytes": 2768,
+      "decodedBytes": 2768,
+      "normalizedBytes": 2768,
+      "uploadMs": 4
+    },
+    {
+      "ts": "2026-10-31T20:48:38.927Z",
+      "event": "request-prepared",
+      "reqId": "7e2446dd",
+      "encoding": "identity",
+      "wireBytes": 276303,
+      "decodedBytes": 276303,
+      "normalizedBytes": 276303,
+      "uploadMs": 449
+    },
+    {
+      "ts": "2026-10-31T20:48:39.574Z",
+      "event": "upstream-opened",
+      "reqId": "5062dfdf",
+      "status": 200,
+      "connectMs": 1171,
+      "normalizedBytes": 2768,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:48:40.667Z",
+      "event": "upstream-opened",
+      "reqId": "7e2446dd",
+      "status": 200,
+      "connectMs": 2191,
+      "normalizedBytes": 276303,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:48:40.992Z",
+      "event": "stream-complete",
+      "reqId": "5062dfdf",
+      "ms": 2589
+    },
+    {
+      "ts": "2026-10-31T20:48:45.105Z",
+      "event": "stream-complete",
+      "reqId": "7e2446dd",
+      "ms": 6629
+    },
+    {
+      "ts": "2026-10-31T20:48:45.913Z",
+      "event": "request-prepared",
+      "reqId": "78341939",
+      "encoding": "identity",
+      "wireBytes": 285481,
+      "decodedBytes": 285481,
+      "normalizedBytes": 285481,
+      "uploadMs": 58
+    },
+    {
+      "ts": "2026-10-31T20:48:47.838Z",
+      "event": "upstream-opened",
+      "reqId": "78341939",
+      "status": 200,
+      "connectMs": 1985,
+      "normalizedBytes": 285481,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:48:57.615Z",
+      "event": "stream-complete",
+      "reqId": "78341939",
+      "ms": 11762
+    },
+    {
+      "ts": "2026-10-31T20:48:59.336Z",
+      "event": "request-prepared",
+      "reqId": "2cace2ab",
+      "encoding": "identity",
+      "wireBytes": 295631,
+      "decodedBytes": 295631,
+      "normalizedBytes": 295631,
+      "uploadMs": 52
+    },
+    {
+      "ts": "2026-10-31T20:49:00.544Z",
+      "event": "upstream-opened",
+      "reqId": "2cace2ab",
+      "status": 200,
+      "connectMs": 1263,
+      "normalizedBytes": 295631,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:49:05.459Z",
+      "event": "stream-complete",
+      "reqId": "2cace2ab",
+      "ms": 6178
+    },
+    {
+      "ts": "2026-10-31T20:49:05.885Z",
+      "event": "request-prepared",
+      "reqId": "8a05d909",
+      "encoding": "identity",
+      "wireBytes": 304885,
+      "decodedBytes": 304885,
+      "normalizedBytes": 304885,
+      "uploadMs": 33
+    },
+    {
+      "ts": "2026-10-31T20:49:07.770Z",
+      "event": "upstream-opened",
+      "reqId": "8a05d909",
+      "status": 200,
+      "connectMs": 1920,
+      "normalizedBytes": 304885,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:49:25.204Z",
+      "event": "stream-complete",
+      "reqId": "8a05d909",
+      "ms": 19354
+    },
+    {
+      "ts": "2026-10-31T20:49:57.295Z",
+      "event": "request-prepared",
+      "reqId": "4becfce3",
+      "encoding": "identity",
+      "wireBytes": 51729,
+      "decodedBytes": 51729,
+      "normalizedBytes": 51729,
+      "uploadMs": 119
+    },
+    {
+      "ts": "2026-10-31T20:49:58.381Z",
+      "event": "upstream-opened",
+      "reqId": "4becfce3",
+      "status": 200,
+      "connectMs": 1205,
+      "normalizedBytes": 51729,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:50:05.821Z",
+      "event": "stream-complete",
+      "reqId": "4becfce3",
+      "ms": 8645
+    },
+    {
+      "ts": "2026-10-31T20:51:10.313Z",
+      "event": "request-prepared",
+      "reqId": "0b56b1f9",
+      "encoding": "identity",
+      "wireBytes": 3312,
+      "decodedBytes": 3312,
+      "normalizedBytes": 3312,
+      "uploadMs": 3
+    },
+    {
+      "ts": "2026-10-31T20:51:10.431Z",
+      "event": "request-prepared",
+      "reqId": "26552d5d",
+      "encoding": "identity",
+      "wireBytes": 307288,
+      "decodedBytes": 307288,
+      "normalizedBytes": 307288,
+      "uploadMs": 476
+    },
+    {
+      "ts": "2026-10-31T20:51:12.310Z",
+      "event": "upstream-opened",
+      "reqId": "26552d5d",
+      "status": 200,
+      "connectMs": 2356,
+      "normalizedBytes": 307288,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:51:12.682Z",
+      "event": "upstream-opened",
+      "reqId": "0b56b1f9",
+      "status": 200,
+      "connectMs": 2373,
+      "normalizedBytes": 3312,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:51:13.774Z",
+      "event": "stream-complete",
+      "reqId": "0b56b1f9",
+      "ms": 3465
+    },
+    {
+      "ts": "2026-10-31T20:51:28.753Z",
+      "event": "client-disconnected",
+      "reqId": "26552d5d",
+      "ms": 18799
+    },
+    {
+      "ts": "2026-10-31T20:52:18.412Z",
+      "event": "request-prepared",
+      "reqId": "1f50a667",
+      "encoding": "identity",
+      "wireBytes": 4166,
+      "decodedBytes": 4166,
+      "normalizedBytes": 4166,
+      "uploadMs": 4
+    },
+    {
+      "ts": "2026-10-31T20:52:18.918Z",
+      "event": "request-prepared",
+      "reqId": "70507853",
+      "encoding": "identity",
+      "wireBytes": 309988,
+      "decodedBytes": 309988,
+      "normalizedBytes": 309988,
+      "uploadMs": 470
+    },
+    {
+      "ts": "2026-10-31T20:52:19.458Z",
+      "event": "upstream-opened",
+      "reqId": "1f50a667",
+      "status": 200,
+      "connectMs": 1051,
+      "normalizedBytes": 4166,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:52:20.331Z",
+      "event": "upstream-opened",
+      "reqId": "70507853",
+      "status": 200,
+      "connectMs": 1883,
+      "normalizedBytes": 309988,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:52:20.694Z",
+      "event": "stream-complete",
+      "reqId": "1f50a667",
+      "ms": 2287
+    },
+    {
+      "ts": "2026-10-31T20:52:28.268Z",
+      "event": "stream-complete",
+      "reqId": "70507853",
+      "ms": 9820
+    },
+    {
+      "ts": "2026-10-31T20:52:28.830Z",
+      "event": "request-prepared",
+      "reqId": "7289face",
+      "encoding": "identity",
+      "wireBytes": 319524,
+      "decodedBytes": 319524,
+      "normalizedBytes": 319524,
+      "uploadMs": 61
+    },
+    {
+      "ts": "2026-10-31T20:52:30.020Z",
+      "event": "upstream-opened",
+      "reqId": "7289face",
+      "status": 200,
+      "connectMs": 1253,
+      "normalizedBytes": 319524,
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "ts": "2026-10-31T20:52:46.181Z",
+      "event": "stream-complete",
+      "reqId": "7289face",
+      "ms": 17414
+    }
+  ]
+}

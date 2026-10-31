@@ -198,8 +198,8 @@ test('text deltas map to block-start + text-delta + block-end + finish', async (
 test('a function call maps to a tool-call block with streamed arguments', async () => {
   const frames = [
     'data: {"type":"response.output_item.added","item":{"type":"function_call","call_id":"c1","id":"i1","name":"bash"}}\n\n',
-    'data: {"type":"response.function_call_arguments.delta","item_id":"c1","delta":"{\\"cmd\\":"}\n\n',
-    'data: {"type":"response.function_call_arguments.delta","item_id":"c1","delta":"\\"ls\\"}"}\n\n',
+    'data: {"type":"response.function_call_arguments.delta","item_id":"i1","delta":"{\\"cmd\\":"}\n\n',
+    'data: {"type":"response.function_call_arguments.delta","item_id":"i1","delta":"\\"ls\\"}"}\n\n',
     'data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"c1","id":"i1","name":"bash","arguments":"{\\"cmd\\":\\"ls\\"}"}}\n\n',
     'data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":5,"output_tokens":4}}}\n\n',
   ]
@@ -803,4 +803,99 @@ test('Fast mode is off by default, so the field is absent', async () => {
     messages: [{ role: 'user', content: 'hi' }],
   })) { /* drain */ }
   assert.equal(captured?.service_tier, undefined)
+})
+
+// ---------- Responses identities must not collide in the harness assembler ----------
+
+async function translatedEvents(events: Record<string, unknown>[]) {
+  const adapter = new SiwcResponsesAdapter({
+    providers: ['chatgpt'],
+    models: ['m'],
+    resolveAccessToken: async () => 'token',
+    fetchImpl: (async () => fakeResponse(events.map(event => `data: ${JSON.stringify(event)}\n\n`))) as unknown as typeof fetch,
+  })
+  const chunks = []
+  for await (const chunk of adapter.stream({ provider: 'chatgpt', model: 'm', messages: [{ role: 'user', content: 'inspect this repository' }] })) chunks.push(chunk)
+  return chunks
+}
+
+/** The host freezes an index at its first block-end; later closes are ignored. */
+function firstClosedBlocks(chunks: Awaited<ReturnType<typeof translatedEvents>>) {
+  const blocks = new Map<number, Record<string, unknown>>()
+  for (const chunk of chunks) {
+    if (chunk.type === 'block-end' && !blocks.has(chunk.index)) blocks.set(chunk.index, chunk.block as Record<string, unknown>)
+  }
+  return [...blocks.values()]
+}
+
+const completedEvent = { type: 'response.completed', response: { status: 'completed' } }
+
+test('a first-turn preamble followed by a tool survives first-close-wins assembly', async () => {
+  // This is the shape of the real DSH failure: text closes at output_index 0,
+  // then the first function appears. Its harness index must not reuse zero.
+  const chunks = await translatedEvents([
+    { type: 'response.output_text.delta', output_index: 0, content_index: 0, delta: 'I will inspect the files.' },
+    { type: 'response.output_text.done', output_index: 0, content_index: 0, text: 'I will inspect the files.' },
+    { type: 'response.output_item.added', output_index: 1, item: { type: 'function_call', id: 'fc_first', call_id: 'call_first', name: 'run_code' } },
+    { type: 'response.function_call_arguments.delta', output_index: 1, item_id: 'fc_first', delta: '{"code":"read()"}' },
+    { type: 'response.output_item.done', output_index: 1, item: { type: 'function_call', id: 'fc_first', call_id: 'call_first', name: 'run_code', arguments: '{"code":"read()"}' } },
+    completedEvent,
+  ])
+  assert.deepEqual(chunks.filter(chunk => chunk.type === 'block-start').map(chunk => [chunk.index, chunk.blockType]), [[0, 'text'], [1, 'tool-call']])
+  assert.deepEqual(firstClosedBlocks(chunks), [
+    { type: 'text', text: 'I will inspect the files.' },
+    { type: 'tool-call', id: 'call_first', name: 'run_code', arguments: '{"code":"read()"}' },
+  ])
+})
+
+test('reasoning, text parts and parallel tools share one collision-free index namespace', async () => {
+  const chunks = await translatedEvents([
+    { type: 'response.reasoning_summary_text.delta', output_index: 0, summary_index: 0, delta: 'Inspect ' },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: 'Reading.' },
+    { type: 'response.output_item.added', output_index: 2, item: { type: 'function_call', id: 'fc_a', call_id: 'call_a', name: 'read' } },
+    { type: 'response.reasoning_summary_text.delta', output_index: 0, summary_index: 0, delta: 'carefully.' },
+    { type: 'response.output_item.added', output_index: 3, item: { type: 'function_call', id: 'fc_b', call_id: 'call_b', name: 'search' } },
+    { type: 'response.function_call_arguments.delta', output_index: 3, item_id: 'fc_b', delta: '{"q":"body"}' },
+    { type: 'response.function_call_arguments.delta', output_index: 2, item_id: 'fc_a', delta: '{"path":"gateway.mjs"}' },
+    { type: 'response.output_text.done', output_index: 1, content_index: 0, text: 'Reading.' },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 1, delta: 'Checking.' },
+    { type: 'response.output_text.done', output_index: 1, content_index: 1, text: 'Checking.' },
+    { type: 'response.reasoning_summary_text.done', output_index: 0, summary_index: 0, text: 'Inspect carefully.' },
+    // Omit call_id/arguments from one done frame to exercise native item lookup
+    // and reconstruction from the actual item_id-addressed argument deltas.
+    { type: 'response.output_item.done', output_index: 2, item: { type: 'function_call', id: 'fc_a', name: 'read' } },
+    { type: 'response.output_item.done', output_index: 3, item: { type: 'function_call', id: 'fc_b', call_id: 'call_b', name: 'search', arguments: '{"q":"body"}' } },
+    completedEvent,
+  ])
+  const starts = chunks.filter(chunk => chunk.type === 'block-start')
+  assert.deepEqual(starts.map(chunk => [chunk.index, chunk.blockType]), [[0, 'reasoning'], [1, 'text'], [2, 'tool-call'], [3, 'tool-call'], [4, 'text']])
+  assert.ok(chunks.filter(chunk => 'index' in chunk).every(chunk => Number.isInteger(chunk.index) && chunk.index >= 0))
+  assert.deepEqual(chunks.filter(chunk => chunk.type === 'reasoning-delta').map(chunk => chunk.index), [0, 0])
+  assert.deepEqual(chunks.filter(chunk => chunk.type === 'tool-call-delta' && chunk.argumentsDelta).map(chunk => [chunk.id, chunk.argumentsDelta]), [['call_b', '{"q":"body"}'], ['call_a', '{"path":"gateway.mjs"}']])
+  assert.deepEqual(firstClosedBlocks(chunks).filter(block => block.type === 'tool-call'), [
+    { type: 'tool-call', id: 'call_a', name: 'read', arguments: '{"path":"gateway.mjs"}' },
+    { type: 'tool-call', id: 'call_b', name: 'search', arguments: '{"q":"body"}' },
+  ])
+  assert.equal(firstClosedBlocks(chunks).length, 5)
+})
+
+test('legacy call-id argument deltas remain compatible and closed blocks ignore stragglers', async () => {
+  const chunks = await translatedEvents([
+    { type: 'response.output_item.added', item: { type: 'function_call', id: 'fc_legacy', call_id: 'call_legacy', name: 'read' } },
+    { type: 'response.function_call_arguments.delta', item_id: 'call_legacy', delta: '{}' },
+    { type: 'response.output_item.done', item: { type: 'function_call', id: 'fc_legacy', call_id: 'call_legacy', name: 'read', arguments: '{}' } },
+    { type: 'response.function_call_arguments.delta', item_id: 'fc_legacy', delta: 'ignored' },
+    { type: 'response.output_item.done', item: { type: 'function_call', id: 'fc_legacy', call_id: 'call_legacy', name: 'changed', arguments: 'ignored' } },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: 'Done.' },
+    { type: 'response.output_text.done', output_index: 1, content_index: 0, text: 'Done.' },
+    { type: 'response.output_text.delta', output_index: 1, content_index: 0, delta: 'ignored' },
+    completedEvent,
+  ])
+  assert.equal(chunks.filter(chunk => chunk.type === 'block-start').length, 2)
+  assert.equal(chunks.filter(chunk => chunk.type === 'block-end').length, 2)
+  assert.deepEqual(chunks.filter(chunk => chunk.type === 'tool-call-delta' && chunk.argumentsDelta).map(chunk => chunk.argumentsDelta), ['{}'])
+  assert.deepEqual(firstClosedBlocks(chunks), [
+    { type: 'tool-call', id: 'call_legacy', name: 'read', arguments: '{}' },
+    { type: 'text', text: 'Done.' },
+  ])
 })

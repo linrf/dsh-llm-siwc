@@ -45,3 +45,5 @@ VM备份：`/opt/siwc-gateway/backups/20261031T203054Z-30495/`。备份包含私
 证据另见 `gateway-2.3.0-deployment.json`、`gateway-2.3.0-public.json`、`gateway-2.3.0-curl-upload.json`、`gateway-2.3.0-production.json`。
 
 正式服务最终读回：主源码与 module SHA 一致；active/running，NRestarts=0，MemoryPeak=143,327,232 bytes，OOM=0。inflight、各队列、upload/validator/FD、spool、SSE均为0，spool目录为空；临时监听与测试文件已清理。后续部署以本仓库 `gateway/deploy-update.sh` 为入口，旧 default-workspace 脚本不作为2.3的部署入口。
+
+后续已补DSH桌面多轮实景验收，并修复插件文本/工具块编号冲突造成的首轮提前结束。该修复更新客户端插件源码及lib，VM 2.3.0源码未改。修复前后证据及桌面测试见 [DSH实景验收](dsh-realistic-acceptance-2026-11-01.md)。

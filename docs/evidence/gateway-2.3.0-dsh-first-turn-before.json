@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "session-8cb7ab51-4a24-43bc-ae33-27cf9f03ccce",
+  "scope": {
+    "turn": 1,
+    "assistantMessageSeq": 19,
+    "source": "canonical session.v4.jsonl.zstd; post-adapter stream and materialized message"
+  },
+  "streamBlockLifecycle": [
+    {
+      "type": "block-start",
+      "index": 0,
+      "blockType": "text"
+    },
+    {
+      "type": "block-end",
+      "index": 0
+    },
+    {
+      "type": "block-start",
+      "index": 0,
+      "blockType": "tool-call"
+    },
+    {
+      "type": "block-end",
+      "index": 0
+    },
+    {
+      "type": "finish",
+      "reason": "stop"
+    }
+  ],
+  "streamToolCalls": [
+    {
+      "type": "tool-call-chunks",
+      "index": 0,
+      "name": "run_code",
+      "idPresent": true,
+      "idMatchesMaterializedMessageToolCall": false,
+      "idMatchesDispatchedToolCall": false,
+      "idMatchesToolResult": false
+    }
+  ],
+  "materializedMessageContentTypes": [
+    "text"
+  ],
+  "dispatchedRootToolCallCount": 0,
+  "toolResultCount": 0,
+  "observations": {
+    "indexReusedForTextAndToolBlocks": true,
+    "streamContainsToolCall": true,
+    "materializedMessageContainsToolCall": false,
+    "toolWasDispatched": false
+  },
+  "interpretation": "The adapter stream includes a tool call after a text block but reuses index 0; the materialized message contains only text and no tool dispatch follows. A finish reason of stop and turn/end completed do not establish successful tool execution. This corrects the initial metadata-only conclusion that the model chose not to call a tool.",
+  "acceptance": {
+    "passed": false,
+    "reason": "stream tool call was lost before dispatch; old-session results cannot establish an unqualified successful realistic acceptance"
+  },
+  "privacy": "No prompts, text content, tool arguments, raw tool call IDs or credentials are retained."
+}
