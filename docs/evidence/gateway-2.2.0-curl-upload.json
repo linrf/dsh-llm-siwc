@@ -1,0 +1,10 @@
+{
+  "client": "curl",
+  "decodedMiB": 20,
+  "rateBytesPerSecond": 524288,
+  "exitCode": 0,
+  "status": 400,
+  "uploadedBytes": 20971520,
+  "seconds": 40.392,
+  "validationRejectedBeforeInference": true
+}

@@ -1,0 +1,98 @@
+{
+  "node": "v22.22.0",
+  "memoryMax": 536870912,
+  "memorySwapMax": 0,
+  "cgroupPeakBytes": 383979520,
+  "events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "ingressPort": 21458,
+  "sseCancellationReachedUpstream": true,
+  "checks": [
+    {
+      "key": "single-20",
+      "mib": 20,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 958
+    },
+    {
+      "key": "single-30",
+      "mib": 30,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1241
+    },
+    {
+      "key": "single-50",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1478
+    },
+    {
+      "key": "mixed-unicode-50",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1833
+    },
+    {
+      "key": "parallel-50-a",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 2752
+    },
+    {
+      "key": "parallel-50-b",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 3714
+    }
+  ],
+  "observed": [
+    {
+      "key": "single-20",
+      "bytes": 20971497,
+      "valid": true
+    },
+    {
+      "key": "single-30",
+      "bytes": 31457257,
+      "valid": true
+    },
+    {
+      "key": "single-50",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "mixed-unicode-50",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "parallel-50-a",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "parallel-50-b",
+      "bytes": 52428777,
+      "valid": true
+    }
+  ],
+  "resourceMetrics": [
+    "siwc_gateway_inflight_requests 0",
+    "siwc_gateway_queued_requests 0",
+    "siwc_gateway_normalizer_active 0",
+    "siwc_gateway_normalizer_queued 0",
+    "siwc_gateway_upstream_uploads_active 0",
+    "siwc_gateway_spool_reserved_bytes 0",
+    "siwc_gateway_spool_directories 0",
+    "siwc_gateway_normalizer_peak_rss_bytes 266739712",
+    "siwc_gateway_request_normalized_bytes_total 262143938"
+  ],
+  "sourceSha256": "1cc97fe1160cdfc8de4fd15a1d32cf6d44d9ce26c2f897526f6ee947311a3fbb",
+  "scope": "loopback Caddy -> 512MiB no-swap gateway service -> loopback synthetic upstream; generator outside service"
+}

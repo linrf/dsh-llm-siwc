@@ -1,0 +1,165 @@
+TAP version 13
+# Subtest: a failed refresh does not prevent a later HTTP request from refreshing
+ok 1 - a failed refresh does not prevent a later HTTP request from refreshing
+  ---
+  duration_ms: 994.024446
+  type: 'test'
+  ...
+# Subtest: concurrent expired credentials share one refresh
+ok 2 - concurrent expired credentials share one refresh
+  ---
+  duration_ms: 2065.07088
+  type: 'test'
+  ...
+# Subtest: concurrent 401s reuse one rotated token, including a late old-token 401
+ok 3 - concurrent 401s reuse one rotated token, including a late old-token 401
+  ---
+  duration_ms: 1835.906802
+  type: 'test'
+  ...
+# Subtest: waiting capacity is bounded and a disconnected waiter never opens upstream
+ok 4 - waiting capacity is bounded and a disconnected waiter never opens upstream
+  ---
+  duration_ms: 709.80807
+  type: 'test'
+  ...
+# Subtest: queue timeout and body rejection release capacity for the next request
+ok 5 - queue timeout and body rejection release capacity for the next request
+  ---
+  duration_ms: 1003.417633
+  type: 'test'
+  ...
+# Subtest: disconnects during upload and streaming release their occupied slot
+ok 6 - disconnects during upload and streaming release their occupied slot
+  ---
+  duration_ms: 644.759145
+  type: 'test'
+  ...
+# Subtest: model refresh is shared, serves bounded stale data on failure, then recovers
+ok 7 - model refresh is shared, serves bounded stale data on failure, then recovers
+  ---
+  duration_ms: 1031.594386
+  type: 'test'
+  ...
+# Subtest: 20MiB identity request is normalized without changing its content
+ok 8 - 20MiB identity request is normalized without changing its content
+  ---
+  duration_ms: 1593.630037
+  type: 'test'
+  ...
+# {"sizeMiB":20,"encoding":"identity","mixed":false,"wireBytes":20971520,"parentPeakRss":101752832,"workerPeakRss":99151872}
+# Subtest: 30MiB gzip request is normalized without changing its content
+ok 9 - 30MiB gzip request is normalized without changing its content
+  ---
+  duration_ms: 2107.496762
+  type: 'test'
+  ...
+# {"sizeMiB":30,"encoding":"gzip","mixed":false,"wireBytes":30685,"parentPeakRss":116195328,"workerPeakRss":120020992}
+# Subtest: 50MiB zstd request is normalized without changing its content
+ok 10 - 50MiB zstd request is normalized without changing its content
+  ---
+  duration_ms: 2671.949513
+  type: 'test'
+  ...
+# {"sizeMiB":50,"encoding":"zstd","mixed":false,"wireBytes":1710,"parentPeakRss":135548928,"workerPeakRss":162070528}
+# Subtest: 50MiB identity mixed Unicode request is normalized without changing its content
+ok 11 - 50MiB identity mixed Unicode request is normalized without changing its content
+  ---
+  duration_ms: 2545.936749
+  type: 'test'
+  ...
+# {"sizeMiB":50,"encoding":"identity","mixed":true,"wireBytes":52428800,"parentPeakRss":136634368,"workerPeakRss":266858496}
+# Subtest: two concurrent 50MiB bodies use one normalizer and leave no spool files during SSE
+ok 12 - two concurrent 50MiB bodies use one normalizer and leave no spool files during SSE
+  ---
+  duration_ms: 7011.539877
+  type: 'test'
+  ...
+# {"sizeMiB":"2x50 mixed Unicode","parentPeakRss":190083072,"workerPeakRss":266891264,"maximumWorkers":1}
+# Subtest: string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics
+ok 13 - string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics
+  ---
+  duration_ms: 464.016697
+  type: 'test'
+  ...
+# Subtest: unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned
+ok 14 - unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned
+  ---
+  duration_ms: 737.971499
+  type: 'test'
+  ...
+# Subtest: wire quota, disk reservation and processing timeout fail without leaking capacity
+ok 15 - wire quota, disk reservation and processing timeout fail without leaking capacity
+  ---
+  duration_ms: 630.865854
+  type: 'test'
+  ...
+# Subtest: upload idle and total deadlines are separate and always clean disk and slots
+ok 16 - upload idle and total deadlines are separate and always clean disk and slots
+  ---
+  duration_ms: 632.397324
+  type: 'test'
+  ...
+# Subtest: cancelling a large request during normalization kills the worker and frees resources
+ok 17 - cancelling a large request during normalization kills the worker and frees resources
+  ---
+  duration_ms: 978.463038
+  type: 'test'
+  ...
+# Subtest: startup removes abandoned private request files and preserves unrelated spool entries
+ok 18 - startup removes abandoned private request files and preserves unrelated spool entries
+  ---
+  duration_ms: 137.404947
+  type: 'test'
+  ...
+# Subtest: an early upstream 401 replays a large file with the new token
+ok 19 - an early upstream 401 replays a large file with the new token
+  ---
+  duration_ms: 1188.223176
+  type: 'test'
+  ...
+# Subtest: gzip members decode together while zstd decoder window remains bounded
+ok 20 - gzip members decode together while zstd decoder window remains bounded
+  ---
+  duration_ms: 706.241526
+  type: 'test'
+  ...
+# Subtest: spooled data is private and normalized bytes are removed before SSE streaming
+ok 21 - spooled data is private and normalized bytes are removed before SSE streaming
+  ---
+  duration_ms: 416.254243
+  type: 'test'
+  ...
+# Subtest: early upstream 400 is delivered completely and its unread upload is closed
+ok 22 - early upstream 400 is delivered completely and its unread upload is closed
+  ---
+  duration_ms: 1088.701766
+  type: 'test'
+  ...
+# Subtest: early upstream 200 is delivered completely and its unread upload is closed
+ok 23 - early upstream 200 is delivered completely and its unread upload is closed
+  ---
+  duration_ms: 1105.342858
+  type: 'test'
+  ...
+# Subtest: upstream error body byte limit preserves status and Retry-After without retaining body data
+ok 24 - upstream error body byte limit preserves status and Retry-After without retaining body data
+  ---
+  duration_ms: 477.554321
+  type: 'test'
+  ...
+# Subtest: upstream error body deadline preserves status and Retry-After without retaining body data
+ok 25 - upstream error body deadline preserves status and Retry-After without retaining body data
+  ---
+  duration_ms: 511.494748
+  type: 'test'
+  ...
+1..25
+# tests 25
+# suites 0
+# pass 25
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 33478.101667

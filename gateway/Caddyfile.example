@@ -1,0 +1,34 @@
+{
+	admin off
+	servers {
+		protocols h1 h2
+	}
+}
+
+gateway.example.com {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	@sse path /v1/responses /responses
+	handle @sse {
+		# SSE content-type already flushes immediately. A negative
+		# flush_interval prevents disconnect cancellation reaching Node.
+		reverse_proxy 127.0.0.1:1457
+	}
+	@models path /v1/models /models
+	handle @models {
+		encode zstd gzip
+		reverse_proxy 127.0.0.1:1457
+	}
+	@health path /healthz
+	handle @health {
+		reverse_proxy 127.0.0.1:1457
+	}
+	handle {
+		respond "not found" 404
+	}
+	log {
+		output stderr
+		format json
+	}
+}

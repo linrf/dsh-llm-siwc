@@ -1,0 +1,16 @@
+{
+  "client": "Node24 + undici6, existing local proxy",
+  "modelCatalog": {
+    "status": 200,
+    "models": 11,
+    "cache": "fresh"
+  },
+  "modelSmoke": {
+    "status": 200,
+    "completeSse": true,
+    "replyMatched": "GATEWAY_V220_OK",
+    "clientMs": 3171,
+    "bodyShape": "messages array with instructions"
+  },
+  "scope": "one short real inference; large request tests used synthetic upstream or pre-inference validation"
+}

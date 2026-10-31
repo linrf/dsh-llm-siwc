@@ -9,6 +9,8 @@ profile — no DSH rebuild is involved.
 
 Verified against the live service on 2026-10-08.
 
+VM gateway source, deployment templates, and tests live in [gateway/](gateway/README.md). See the [repair and validation record](docs/changes-2026-11-01.md) for the 2026-11-01 scope.
+
 ## Requirements
 
 - DSH **0.2.0-rc.2** — the plugin declares `>=0.2.0-rc.2 <0.3.0` peers, and DSH

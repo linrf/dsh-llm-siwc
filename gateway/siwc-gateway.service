@@ -1,0 +1,43 @@
+[Unit]
+Description=SIWC gateway (ChatGPT plan Responses bridge)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=siwc-gw
+Group=siwc-gw
+EnvironmentFile=/etc/siwc-gateway.env
+ExecStart=/usr/local/bin/node /opt/siwc-gateway/siwc-gateway.mjs
+Restart=always
+RestartSec=2
+TimeoutStopSec=25
+KillMode=control-group
+LimitCORE=0
+MemorySwapMax=0
+OOMPolicy=continue
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=siwc-gateway
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/siwc-gateway
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+LimitNOFILE=65535
+MemoryMax=512M
+CPUQuota=150%
+TasksMax=512
+
+[Install]
+WantedBy=multi-user.target

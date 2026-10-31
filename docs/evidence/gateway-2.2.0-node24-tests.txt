@@ -1,0 +1,38 @@
+✔ a failed refresh does not prevent a later HTTP request from refreshing (184.00675ms)
+✔ concurrent expired credentials share one refresh (460.800875ms)
+✔ concurrent 401s reuse one rotated token, including a late old-token 401 (481.193ms)
+✔ waiting capacity is bounded and a disconnected waiter never opens upstream (201.239875ms)
+✔ queue timeout and body rejection release capacity for the next request (316.429583ms)
+✔ disconnects during upload and streaming release their occupied slot (187.416917ms)
+✔ model refresh is shared, serves bounded stale data on failure, then recovers (787.215375ms)
+✔ 20MiB identity request is normalized without changing its content (235.431291ms)
+ℹ {"sizeMiB":20,"encoding":"identity","mixed":false,"wireBytes":20971520,"parentPeakRss":98664448,"workerPeakRss":160792576}
+✔ 30MiB gzip request is normalized without changing its content (298.12475ms)
+ℹ {"sizeMiB":30,"encoding":"gzip","mixed":false,"wireBytes":30685,"parentPeakRss":120651776,"workerPeakRss":192200704}
+✔ 50MiB zstd request is normalized without changing its content (336.048334ms)
+ℹ {"sizeMiB":50,"encoding":"zstd","mixed":false,"wireBytes":1710,"parentPeakRss":152928256,"workerPeakRss":288702464}
+✔ 50MiB identity mixed Unicode request is normalized without changing its content (354.629167ms)
+ℹ {"sizeMiB":50,"encoding":"identity","mixed":true,"wireBytes":52428800,"parentPeakRss":168263680,"workerPeakRss":393527296}
+✔ two concurrent 50MiB bodies use one normalizer and leave no spool files during SSE (571.457583ms)
+ℹ {"sizeMiB":"2x50 mixed Unicode","parentPeakRss":229277696,"workerPeakRss":393805824,"maximumWorkers":1}
+✔ string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics (122.4495ms)
+✔ unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned (179.766916ms)
+✔ wire quota, disk reservation and processing timeout fail without leaking capacity (205.210125ms)
+✔ upload idle and total deadlines are separate and always clean disk and slots (369.2115ms)
+✔ cancelling a large request during normalization kills the worker and frees resources (194.472458ms)
+✔ startup removes abandoned private request files and preserves unrelated spool entries (36.264166ms)
+✔ an early upstream 401 replays a large file with the new token (167.605625ms)
+✔ gzip members decode together while zstd decoder window remains bounded (185.312167ms)
+✔ spooled data is private and normalized bytes are removed before SSE streaming (108.18975ms)
+✔ early upstream 400 is delivered completely and its unread upload is closed (221.421208ms)
+✔ early upstream 200 is delivered completely and its unread upload is closed (234.545416ms)
+✔ upstream error body byte limit preserves status and Retry-After without retaining body data (135.208583ms)
+✔ upstream error body deadline preserves status and Retry-After without retaining body data (193.702583ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6816.25725
