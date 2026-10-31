@@ -17,6 +17,8 @@ import urllib.request
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--candidate', required=True)
 p.add_argument('--sha256', required=True)
+p.add_argument('--module-candidate', required=True)
+p.add_argument('--module-sha256', required=True)
 a = p.parse_args()
 lock = open('/opt/siwc-gateway/.deploy.lock', 'a')
 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -24,6 +26,11 @@ candidate = Path(a.candidate)
 payload = candidate.read_bytes()
 if hashlib.sha256(payload).hexdigest() != a.sha256:
     raise SystemExit('candidate SHA-256 mismatch')
+module_candidate = Path(a.module_candidate)
+module_payload = module_candidate.read_bytes()
+if hashlib.sha256(module_payload).hexdigest() != a.module_sha256:
+    raise SystemExit('streaming module SHA-256 mismatch')
+subprocess.run(['/usr/local/bin/node', '--input-type=module', '--check'], input=module_payload, check=True)
 text = payload.decode()
 version = re.search(r"const VERSION = '([^']+)'", text).group(1)
 subprocess.run(['/usr/local/bin/node', '--input-type=module', '--check'], input=payload, check=True)
@@ -51,21 +58,24 @@ def quiet():
 quiet()
 old_version = get_health()['version']
 source = Path('/opt/siwc-gateway/siwc-gateway.mjs')
+module = Path('/opt/siwc-gateway/streaming-json.mjs')
 env = Path('/etc/siwc-gateway.env')
 caddy = Path('/etc/caddy/Caddyfile')
 dropin = Path('/etc/systemd/system/siwc-gateway.service.d/large-requests.conf')
 settings = {
-    'MAX_CONCURRENCY': '2', 'MAX_QUEUE': '8', 'QUEUE_WAIT_MS': '30000',
+    'MAX_RESPONSE_CONCURRENCY': '8', 'MAX_UPLOAD_CONCURRENCY': '2',
+    'MAX_UPLOAD_QUEUE': '8', 'UPLOAD_QUEUE_WAIT_MS': '30000',
+    'MAX_QUEUE': '8', 'QUEUE_WAIT_MS': '30000',
     'MAX_WIRE_BODY_BYTES': '67108864', 'MAX_DECODED_BODY_BYTES': '67108864',
-    'MAX_SPOOL_BYTES': '268566528', 'MIN_SPOOL_FREE_BYTES': '134217728',
+    'MAX_SPOOL_BYTES': '537395200', 'MIN_SPOOL_FREE_BYTES': '134217728',
     'SPOOL_DIR': '/var/lib/siwc-gateway/requests',
     'BODY_IDLE_TIMEOUT_MS': '30000', 'BODY_TOTAL_TIMEOUT_MS': '300000',
-    'NORMALIZE_TIMEOUT_MS': '30000', 'NORMALIZE_WAIT_MS': '30000',
-    'NORMALIZE_HEAP_MIB': '224', 'ZSTD_WINDOW_LOG_MAX': '23',
+    'ZSTD_WINDOW_LOG_MAX': '23', 'UPSTREAM_UPLOAD_TIMEOUT_MS': '300000',
+    'UPSTREAM_HEADERS_TIMEOUT_MS': '180000',
     'UPSTREAM_ERROR_BODY_TIMEOUT_MS': '10000',
 }
 lines = [line for line in env.read_text().splitlines()
-         if line.partition('=')[0] not in set(settings) | {'MAX_BODY_BYTES', 'BODY_TIMEOUT_MS'}]
+         if line.partition('=')[0] not in set(settings) | {'MAX_BODY_BYTES', 'BODY_TIMEOUT_MS', 'MAX_CONCURRENCY', 'NORMALIZE_TIMEOUT_MS', 'NORMALIZE_WAIT_MS', 'NORMALIZE_HEAP_MIB'}]
 new_env = '\n'.join(lines + [key + '=' + value for key, value in settings.items()]) + '\n'
 new_caddy = re.sub(r'^\s*flush_interval\s+-1\s*\n', '', caddy.read_text(), flags=re.M)
 caddy_changed = new_caddy != caddy.read_text()
@@ -98,7 +108,7 @@ backup = Path('/opt/siwc-gateway/backups') / (time.strftime('%Y%m%dT%H%M%SZ', ti
 backup.mkdir(parents=True, mode=0o700)
 os.chmod(backup, 0o700)
 manifest = []
-for i, path in enumerate([source, env, caddy, dropin]):
+for i, path in enumerate([source, env, caddy, dropin, module]):
     existed = path.exists()
     item = {'path': str(path), 'existed': existed, 'backup': str(backup / str(i))}
     if existed:
@@ -114,10 +124,13 @@ caddy_restart_attempted = False
 try:
     atomic(env, new_env.encode(), 0o600)
     atomic(dropin, b'[Service]\nLimitCORE=0\nKillMode=control-group\nMemorySwapMax=0\nOOMPolicy=continue\n', 0o644)
+    atomic(module, module_payload, 0o644)
     atomic(source, payload, 0o644)
     if caddy_changed: atomic(caddy, new_caddy.encode(), stat.S_IMODE(caddy.stat().st_mode), caddy.stat().st_uid, caddy.stat().st_gid)
     if hashlib.sha256(source.read_bytes()).hexdigest() != a.sha256:
         raise RuntimeError('installed source SHA-256 mismatch')
+    if hashlib.sha256(module.read_bytes()).hexdigest() != a.module_sha256:
+        raise RuntimeError('installed module SHA-256 mismatch')
     quiet()
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
     gateway_restart_attempted = True
@@ -144,4 +157,5 @@ except Exception as failure:
     if errors: raise RuntimeError('update failed; rollback needs inspection: ' + '; '.join(errors)) from failure
     raise
 candidate.unlink(missing_ok=True)
-print(json.dumps({'version': version, 'sha256': a.sha256, 'backup': str(backup), 'caddyChanged': caddy_changed}))
+module_candidate.unlink(missing_ok=True)
+print(json.dumps({'version': version, 'sha256': a.sha256, 'streamingModuleSha256': a.module_sha256, 'backup': str(backup), 'caddyChanged': caddy_changed}))

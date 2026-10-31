@@ -1,0 +1,39 @@
+[
+  {
+    "encoding": "identity",
+    "decodedMiB": 20,
+    "uploadTargetMs": 40000,
+    "status": 400,
+    "validationRejectedBeforeInference": true,
+    "ms": 40665
+  },
+  {
+    "encoding": "gzip",
+    "decodedMiB": 30,
+    "uploadTargetMs": 0,
+    "status": 400,
+    "validationRejectedBeforeInference": true,
+    "ms": 2143
+  },
+  {
+    "encoding": "zstd",
+    "decodedMiB": 50,
+    "uploadTargetMs": 0,
+    "status": 400,
+    "validationRejectedBeforeInference": true,
+    "ms": 2334
+  },
+  {
+    "kind": "model-catalog",
+    "status": 200,
+    "models": 11,
+    "cache": "fresh"
+  },
+  {
+    "kind": "model-smoke",
+    "status": 200,
+    "completed": true,
+    "expectedReply": true,
+    "ms": 3868
+  }
+]

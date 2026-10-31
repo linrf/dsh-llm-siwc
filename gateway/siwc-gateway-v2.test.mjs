@@ -126,7 +126,7 @@ globalThis.fetch = (input, init) => {
     return Number(text.split('\n').find((line) => line.startsWith(name + ' '))?.split(' ')[1])
   }
   const clean = async () => {
-    await until(async () => await metric('siwc_gateway_spool_reserved_bytes') === 0 && await metric('siwc_gateway_normalizer_active') === 0 && await metric('siwc_gateway_spool_directories') === 0 && await metric('siwc_gateway_upstream_uploads_active') === 0, 'request files, upload FDs and worker capacity released')
+    await until(async () => await metric('siwc_gateway_spool_reserved_bytes') === 0 && await metric('siwc_gateway_normalizer_active') === 0 && await metric('siwc_gateway_spool_directories') === 0 && await metric('siwc_gateway_upstream_uploads_active') === 0 && await metric('siwc_gateway_upload_active') === 0 && await metric('siwc_gateway_upload_queued') === 0, 'request files, upload FDs and worker capacity released')
     assert.deepEqual(await readdir(join(dir, 'request-spool')), [])
   }
   return { base, calls, request, post, metric, clean, dir, pid: child.pid, logs: () => stdout + stderr }
@@ -356,7 +356,7 @@ for (const [size, encoding, mixed] of [[20, 'identity', false], [30, 'gzip', fal
   })
 }
 
-test('two concurrent 50MiB bodies use one normalizer and leave no spool files during SSE', { timeout: 30000 }, async (t) => {
+test('two concurrent 50MiB bodies use bounded streaming validators and leave no spool files during SSE', { timeout: 30000 }, async (t) => {
   const received = []
   const held = []
   const f = await fixture(t, { env: largeEnv, onApiRequest: async (req, res) => {
@@ -379,7 +379,7 @@ test('two concurrent 50MiB bodies use one normalizer and leave no spool files du
   clearInterval(sampler)
   assert.ok(responses.every((response) => response.status === 200))
   assert.deepEqual(received, [{ hash: payload.hash, bytes: payload.normalizedBytes }, { hash: payload.hash, bytes: payload.normalizedBytes }])
-  assert.equal(maximumWorkers, 1)
+  assert.ok(maximumWorkers >= 1 && maximumWorkers <= 2)
   await f.clean()
   assert.equal(await f.metric('siwc_gateway_active_streams'), 2)
   for (const res of held) res.end(sse)
@@ -413,22 +413,22 @@ test('unknown encodings, corrupt compression, zstd trailing frames and decoded b
     ['zstd', Buffer.from('not zstd'), 400],
     ['zstd', Buffer.concat([zstdCompressSync(small), zstdCompressSync(small)]), 400],
     ['zstd', Buffer.concat([zstdCompressSync(small), Buffer.from('ignored junk')]), 400],
-    ['gzip', gzipSync(Buffer.alloc(MiB, 'a')), 413],
-    ['zstd', zstdCompressSync(Buffer.alloc(MiB, 'a')), 413],
+    ['gzip', gzipSync(Buffer.from('{"input":"' + 'a'.repeat(MiB) + '"}')), 413],
+    ['zstd', zstdCompressSync(Buffer.from('{"input":"' + 'a'.repeat(MiB) + '"}')), 413],
   ]
   for (const [encoding, body, status] of cases) {
     const response = await f.request('/v1/responses', { method: 'POST', body, headers: { 'content-encoding': encoding } })
     assert.equal(response.status, status, await response.text())
     await f.clean()
   }
-  assert.equal(f.calls.responses, 0)
+  // Invalid late data can open an upstream request, but never commit its EOF.
   const valid = await f.post()
   assert.equal(valid.status, 200)
   await valid.text()
   await f.clean()
 })
 
-test('wire quota, disk reservation and processing timeout fail without leaking capacity', { timeout: 12000 }, async (t) => {
+test('wire quota and disk reservation fail without leaking capacity', { timeout: 12000 }, async (t) => {
   const limited = await fixture(t, { env: { ...largeEnv, MAX_WIRE_BODY_BYTES: '128' } })
   const response = await limited.request('/v1/responses', { method: 'POST', body: Readable.from([Buffer.alloc(256, 'a')]), duplex: 'half' })
   assert.equal(response.status, 413)
@@ -438,13 +438,7 @@ test('wire quota, disk reservation and processing timeout fail without leaking c
   const busy = await disk.post()
   assert.equal(busy.status, 503)
   await busy.text(); await disk.clean()
-  const workerTimeout = await fixture(t, { env: { NORMALIZE_TIMEOUT_MS: '1' } })
-  for (let i = 0; i < 2; i++) {
-    const timedOut = await workerTimeout.post()
-    assert.equal(timedOut.status, 503)
-    await timedOut.text(); await workerTimeout.clean()
-  }
-  assert.equal(workerTimeout.calls.responses, 0)
+
 })
 
 test('upload idle and total deadlines are separate and always clean disk and slots', { timeout: 12000 }, async (t) => {
@@ -470,7 +464,7 @@ test('upload idle and total deadlines are separate and always clean disk and slo
   }
 })
 
-test('cancelling a large request during normalization kills the worker and frees resources', { timeout: 20000 }, async (t) => {
+test('cancelling a large request during streaming validation stops the producer and frees resources', { timeout: 20000 }, async (t) => {
   const f = await fixture(t, { env: largeEnv })
   const payload = largePayload(30, true)
   const abort = new AbortController()
@@ -627,3 +621,226 @@ for (const slow of [false, true]) {
     await until(async () => await f.metric('siwc_gateway_inflight_requests') === 0, 'completed response cleanup released its slot')
   })
 }
+
+// Ordering assertions prove pipelining; no network-speed threshold is involved.
+for (const encoding of ['identity', 'gzip', 'zstd']) {
+  test(`${encoding} is forwarded before client EOF; IDs and cache headers survive`, { timeout: 8000 }, async (t) => {
+    let sawPrefix
+    let firstChunk
+    const prefixSeen = new Promise(resolve => { sawPrefix = resolve })
+    let forwarded
+    const f = await fixture(t, { onApiRequest: async (req, res) => {
+      const parts = []
+      for await (const part of req) { parts.push(part); if (!firstChunk) { firstChunk = true; sawPrefix() } }
+      forwarded = JSON.parse(Buffer.concat(parts))
+      assert.equal(req.headers['session-id'], 'stable-cache-session')
+      assert.equal(req.headers['conversation_id'], 'stable-conversation')
+      res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse)
+    } })
+    const req = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken, 'session-id': 'stable-cache-session', conversation_id: 'stable-conversation', 'content-encoding': encoding } })
+    const completion = new Promise((resolve, reject) => { req.on('error', reject); req.on('response', async res => { for await (const _ of res) {} resolve(res.statusCode) }) })
+    const a = Buffer.from('{"model":"fixture","input":[{"id":"msg_keep","call_id":"call_keep","content":"prefix')
+    const b = Buffer.from('suffix"}],"prompt_cache_key":"keep-cache","store":true,"stream":false}')
+    if (encoding === 'identity') req.write(a)
+    // Separate gzip members and zstd prefix/full compressed data need explicit
+    // compressor flush for compressed upload pipelining to be observable.
+    let compressor
+    if (encoding !== 'identity') {
+      const z = await import('node:zlib')
+      compressor = encoding === 'gzip' ? z.createGzip() : z.createZstdCompress()
+      compressor.pipe(req)
+      compressor.write(a)
+      await new Promise((resolve, reject) => compressor.flush(encoding === 'gzip' ? z.constants.Z_SYNC_FLUSH : z.constants.ZSTD_e_flush, error => error ? reject(error) : resolve()))
+    }
+    await Promise.race([prefixSeen, delay(1500).then(() => assert.fail('upstream did not receive the prefix before client EOF'))])
+    assert.equal(req.writableEnded, false)
+    if (compressor) compressor.end(b); else req.end(b)
+    assert.equal(await completion, 200)
+    assert.deepEqual(forwarded, { model: 'fixture', input: [{ id: 'msg_keep', call_id: 'call_keep', content: 'prefixsuffix' }], prompt_cache_key: 'keep-cache', store: false, stream: true })
+    await f.clean()
+  })
+}
+
+test('long SSE and waiting headers do not occupy upload slots', { timeout: 10000 }, async (t) => {
+  const held = []
+  let waitingHeaders
+  const f = await fixture(t, { env: { MAX_RESPONSE_CONCURRENCY: '5', MAX_UPLOAD_CONCURRENCY: '1' }, onApiRequest: async (req, res) => {
+    const parts = []; for await (const part of req) parts.push(part)
+    const model = JSON.parse(Buffer.concat(parts)).model
+    if (model === 'headers') { waitingHeaders = res; return }
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.write('data: {"delta":"open"}\n\n')
+    held.push(res)
+  } })
+  const headersRequest = f.post('headers')
+  await until(() => waitingHeaders, 'first request waiting for upstream headers')
+  const first = await f.post('sse-a')
+  const second = await f.post('sse-b')
+  assert.equal(await f.metric('siwc_gateway_active_streams'), 2)
+  await until(async () => await f.metric('siwc_gateway_upload_active') === 0, 'all upload stages released')
+  assert.equal(await f.metric('siwc_gateway_inflight_requests'), 3)
+  waitingHeaders.writeHead(200, { 'content-type': 'text/event-stream' }); waitingHeaders.end(sse)
+  for (const res of held) res.end(sse)
+  await Promise.all([first.text(), second.text(), headersRequest.then(r => r.text())])
+  await f.clean()
+})
+
+test('upload queue is bounded and cancellation removes its waiter', { timeout: 8000 }, async (t) => {
+  const f = await fixture(t, { env: { MAX_UPLOAD_CONCURRENCY: '1', MAX_UPLOAD_QUEUE: '1' } })
+  const slow = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken } })
+  slow.on('error', () => {}); slow.write('{"input":"held')
+  await until(async () => await f.metric('siwc_gateway_upload_active') === 1, 'one active upload')
+  const abort = new AbortController()
+  const queued = f.post('queued', { signal: abort.signal }).catch(() => null)
+  await until(async () => await f.metric('siwc_gateway_upload_queued') === 1, 'one upload queued')
+  const rejected = await f.post('full')
+  assert.equal(rejected.status, 429); await rejected.text()
+  abort.abort(); await queued
+  await until(async () => await f.metric('siwc_gateway_upload_queued') === 0, 'waiter cancelled')
+  slow.destroy()
+  await f.clean()
+  const next = await f.post(); assert.equal(next.status, 200); await next.text(); await f.clean()
+})
+
+test('early 401 preserves a still-uploading producer and replays the complete validated body', { timeout: 8000 }, async (t) => {
+  let rejected
+  const earlyRejected = new Promise(resolve => { rejected = resolve })
+  let replayed
+  const f = await fixture(t, { onApiRequest: async (req, res) => {
+    if (req.headers.authorization === 'Bearer old-access-token') {
+      res.writeHead(401, { 'content-type': 'application/json' }); res.end('{"error":"expired"}'); rejected(); return
+    }
+    const parts = []; for await (const part of req) parts.push(part)
+    replayed = JSON.parse(Buffer.concat(parts))
+    assert.equal(req.headers['session-id'], 'same-on-replay')
+    assert.equal(Number(req.headers['content-length']), Buffer.concat(parts).length)
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse)
+  } })
+  const req = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken, 'session-id': 'same-on-replay' } })
+  const completion = new Promise((resolve, reject) => { req.on('error', reject); req.on('response', async res => { for await (const _ of res) {} resolve(res.statusCode) }) })
+  req.write('{"model":"fixture","input":"first')
+  await earlyRejected
+  assert.equal(f.calls.token, 0)
+  req.end('last"}')
+  assert.equal(await completion, 200)
+  assert.equal(f.calls.token, 1)
+  assert.equal(f.calls.responses, 2)
+  assert.equal(replayed.input, 'firstlast')
+  await f.clean()
+})
+
+for (const kind of ['json-tail', 'gzip-crc', 'zstd-tail', 'decoded-limit']) {
+  test(`${kind} failure never commits a complete JSON request upstream`, { timeout: 8000 }, async (t) => {
+    let committed = false
+    let opened = false
+    let received = 0
+    const f = await fixture(t, { env: { MAX_WIRE_BODY_BYTES: '131072', MAX_DECODED_BODY_BYTES: '65536' }, onApiRequest: async (req, res) => {
+      opened = true
+      const parts = []
+      try {
+        for await (const part of req) { received += part.length; parts.push(part) }
+        JSON.parse(Buffer.concat(parts)); committed = true
+        res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse)
+      } catch { res.destroy() }
+    } })
+    const prefix = Buffer.from('{"input":"' + 'x'.repeat(32000))
+    let suffix = Buffer.from('"}')
+    let wire
+    const headers = {}
+    if (kind === 'json-tail') wire = Buffer.concat([prefix, suffix, Buffer.from('junk')])
+    if (kind === 'gzip-crc') {
+      wire = gzipSync(Buffer.concat([prefix, suffix])); wire[wire.length - 8] ^= 255; headers['content-encoding'] = 'gzip'
+    }
+    if (kind === 'zstd-tail') { wire = Buffer.concat([zstdCompressSync(Buffer.concat([prefix, suffix])), Buffer.from('junk')]); headers['content-encoding'] = 'zstd' }
+    if (kind === 'decoded-limit') wire = Buffer.concat([prefix, Buffer.alloc(40000, 'x'), suffix])
+    const response = await f.request('/v1/responses', { method: 'POST', body: wire, headers })
+    assert.equal(response.status, kind === 'decoded-limit' ? 413 : 400)
+    await response.text(); await f.clean()
+    assert.equal(committed, false, `opened=${opened} received=${received}`)
+  })
+}
+
+test('headers deadline starts after upload, while an actual header stall times out', { timeout: 8000 }, async (t) => {
+  const f = await fixture(t, { env: { UPSTREAM_HEADERS_TIMEOUT_MS: '80', BODY_IDLE_TIMEOUT_MS: '1000' }, onApi: async (req, res, raw) => {
+    if (JSON.parse(raw).model === 'stall') { await delay(300); if (res.destroyed) return }
+    res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse)
+  } })
+  const slow = Readable.from((async function* () { yield '{"input":"'; for (let i = 0; i < 6; i++) { await delay(30); yield 'x' }; yield '"}' })())
+  const good = await f.request('/v1/responses', { method: 'POST', body: slow, duplex: 'half' })
+  assert.equal(good.status, 200); await good.text(); await f.clean()
+  const stalled = await f.post('stall')
+  assert.equal(stalled.status, 504); assert.match(await stalled.text(), /headers timeout/); await f.clean()
+})
+
+test('an upstream that never reads a body has a bounded upload deadline', { timeout: 8000 }, async (t) => {
+  const sockets = new Set()
+  const server = createTcpServer(socket => { sockets.add(socket); socket.on('error', () => {}); socket.on('close', () => sockets.delete(socket)); socket.pause() })
+  server.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve))
+  t.after(() => { for (const socket of sockets) socket.destroy(); server.close() })
+  const base = 'http://127.0.0.1:' + server.address().port
+  const f = await fixture(t, { env: { ...largeEnv, API_BASE: base + '/v1', UPSTREAM_UPLOAD_TIMEOUT_MS: '150' }, extraOrigins: [base] })
+  const response = await f.request('/v1/responses', { method: 'POST', body: largePayload(20).body })
+  assert.equal(response.status, 504); assert.match(await response.text(), /upload timeout/); await f.clean()
+})
+
+test('an early success cannot hide malformed input received later', { timeout: 8000 }, async (t) => {
+  let opened
+  const upstreamOpened = new Promise(resolve => { opened = resolve })
+  const f = await fixture(t, { onApiRequest: (_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse); opened() } })
+  const req = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken } })
+  const completion = new Promise((resolve, reject) => { req.on('error', reject); req.on('response', async res => { let body = ''; for await (const part of res) body += part; resolve({ status: res.statusCode, body }) }) })
+  req.write('{"input":"first')
+  await upstreamOpened
+  req.end('last"}broken')
+  const response = await completion
+  assert.equal(response.status, 400); assert.match(response.body, /JSON/); await f.clean()
+})
+
+test('cancelling after an early 401 stops producer and avoids a replay', { timeout: 8000 }, async (t) => {
+  let rejected
+  const early = new Promise(resolve => { rejected = resolve })
+  const f = await fixture(t, { onApiRequest: (_req, res) => { res.writeHead(401); res.end('expired'); rejected() } })
+  const req = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken } })
+  req.on('error', () => {}); req.write('{"input":"first')
+  await early
+  req.destroy()
+  await f.clean()
+  assert.equal(f.calls.responses, 1); assert.equal(f.calls.token, 0)
+})
+
+test('cancelling a 401 replay closes its upload and releases its stage', { timeout: 8000 }, async (t) => {
+  let replayOpened
+  let replayClosed = false
+  const replay = new Promise(resolve => { replayOpened = resolve })
+  const f = await fixture(t, { env: largeEnv, onApiRequest: async (req, res) => {
+    if (req.headers.authorization === 'Bearer old-access-token') { res.writeHead(401); res.end('expired'); return }
+    req.once('close', () => { replayClosed = true })
+    replayOpened()
+    req.on('data', () => {}); req.on('error', () => {})
+  } })
+  const abort = new AbortController()
+  const pending = f.request('/v1/responses', { method: 'POST', body: largePayload(10).body, signal: abort.signal }).catch(() => null)
+  await replay
+  abort.abort(); await pending; await f.clean()
+  await until(() => replayClosed, 'replay socket closed')
+  assert.equal(f.calls.token, 1)
+})
+
+test('early 200 does not disable the upstream upload deadline for a stalled client', { timeout: 8000 }, async (t) => {
+  let opened
+  const began = new Promise(resolve => { opened = resolve })
+  const f = await fixture(t, { env: { UPSTREAM_UPLOAD_TIMEOUT_MS: '120', BODY_IDLE_TIMEOUT_MS: '2000', BODY_TOTAL_TIMEOUT_MS: '3000' }, onApiRequest: (_req, res) => { res.writeHead(200, { 'content-type': 'text/event-stream' }); res.end(sse); opened() } })
+  const req = httpRequest(f.base + '/v1/responses', { method: 'POST', headers: { authorization: 'Bearer ' + gatewayToken } })
+  const completion = new Promise((resolve, reject) => { req.on('error', reject); req.on('response', async res => { let body = ''; for await (const part of res) body += part; resolve({ status: res.statusCode, body }) }) })
+  req.write('{"input":"first')
+  await began
+  const response = await completion
+  assert.equal(response.status, 504); assert.match(response.body, /upstream upload timeout/); await f.clean()
+})
+
+test('previous_response_id is explicitly rejected so incremental history is never silently lost', { timeout: 8000 }, async (t) => {
+  const f = await fixture(t)
+  const response = await f.request('/v1/responses', { method: 'POST', body: '{"model":"fixture","input":[],"previous_response_id":"resp_old"}' })
+  assert.equal(response.status, 400)
+  assert.match(await response.text(), /previous_response_id.*complete required history/)
+  await f.clean()
+})

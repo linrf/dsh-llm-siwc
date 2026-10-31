@@ -9,7 +9,7 @@ profile — no DSH rebuild is involved.
 
 Verified against the live service on 2026-10-08.
 
-VM gateway source, deployment templates, and tests live in [gateway/](gateway/README.md). See the [repair and validation record](docs/changes-2026-11-01.md) for the 2026-11-01 scope.
+VM gateway source, deployment templates, and tests live in [gateway/](gateway/README.md). See the [repair and validation record](docs/changes-2026-11-01.md) for the initial repair; [2.3.0 streaming changes and acceptance](docs/streaming-2026-11-01.md) cover pipelined uploads and stage limits.
 
 ## Requirements
 

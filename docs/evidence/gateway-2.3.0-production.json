@@ -1,0 +1,47 @@
+{
+  "health": {
+    "ok": true,
+    "version": "2.3.0",
+    "upstream": "https://api.openai.com/v1",
+    "accessTokenExpiresAt": "2026-10-31T21:05:56.182Z",
+    "modelsCached": "2026-10-31T20:31:37.159Z",
+    "inflight": 0
+  },
+  "sourceSha256": {
+    "siwc-gateway.mjs": "7d71fa76a83cd544fe18553138565688e045a07415952c195e942b1e18cc4398",
+    "streaming-json.mjs": "751eb942efb674f522550ba293dba1ec22200a3f964351c2ad4ac8f3897ec666"
+  },
+  "unit": {
+    "NRestarts": "0",
+    "MemoryCurrent": "93876224",
+    "MemoryPeak": "143327232",
+    "MemoryMax": "536870912",
+    "MemorySwapMax": "0",
+    "ActiveState": "active",
+    "SubState": "running"
+  },
+  "settings": {
+    "SSE_IDLE_TIMEOUT_MS": "300000",
+    "MAX_RESPONSE_CONCURRENCY": "8",
+    "MAX_UPLOAD_CONCURRENCY": "2",
+    "MAX_UPLOAD_QUEUE": "8",
+    "UPLOAD_QUEUE_WAIT_MS": "30000",
+    "MAX_QUEUE": "8",
+    "QUEUE_WAIT_MS": "30000",
+    "MAX_WIRE_BODY_BYTES": "67108864",
+    "MAX_DECODED_BODY_BYTES": "67108864",
+    "MAX_SPOOL_BYTES": "537395200",
+    "MIN_SPOOL_FREE_BYTES": "134217728",
+    "SPOOL_DIR": "/var/lib/siwc-gateway/requests",
+    "BODY_IDLE_TIMEOUT_MS": "30000",
+    "BODY_TOTAL_TIMEOUT_MS": "300000",
+    "ZSTD_WINDOW_LOG_MAX": "23",
+    "UPSTREAM_UPLOAD_TIMEOUT_MS": "300000",
+    "UPSTREAM_HEADERS_TIMEOUT_MS": "180000"
+  },
+  "cgroupMemoryEvents": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "metrics": "# HELP siwc_gateway_requests_total HTTP requests handled\n# TYPE siwc_gateway_requests_total counter\nsiwc_gateway_requests_total 10\n# HELP siwc_gateway_models_requests_total Catalog requests\n# TYPE siwc_gateway_models_requests_total counter\nsiwc_gateway_models_requests_total 2\n# HELP siwc_gateway_responses_requests_total Responses requests\n# TYPE siwc_gateway_responses_requests_total counter\nsiwc_gateway_responses_requests_total 5\n# HELP siwc_gateway_upstream_calls_total Upstream API calls\n# TYPE siwc_gateway_upstream_calls_total counter\nsiwc_gateway_upstream_calls_total 6\n# HELP siwc_gateway_upstream_errors_total Upstream API errors\n# TYPE siwc_gateway_upstream_errors_total counter\nsiwc_gateway_upstream_errors_total 4\n# HELP siwc_gateway_token_refreshes_total Token refreshes\n# TYPE siwc_gateway_token_refreshes_total counter\nsiwc_gateway_token_refreshes_total 0\n# HELP siwc_gateway_token_refresh_failures_total Token refresh failures\n# TYPE siwc_gateway_token_refresh_failures_total counter\nsiwc_gateway_token_refresh_failures_total 0\n# HELP siwc_gateway_models_cache_hits_total Model catalog cache hits\n# TYPE siwc_gateway_models_cache_hits_total counter\nsiwc_gateway_models_cache_hits_total 1\n# HELP siwc_gateway_models_cache_misses_total Model catalog cache misses\n# TYPE siwc_gateway_models_cache_misses_total counter\nsiwc_gateway_models_cache_misses_total 1\n# HELP siwc_gateway_models_refresh_failures_total Failed model catalog refreshes\n# TYPE siwc_gateway_models_refresh_failures_total counter\nsiwc_gateway_models_refresh_failures_total 0\n# HELP siwc_gateway_models_stale_responses_total Catalog responses using stale cache\n# TYPE siwc_gateway_models_stale_responses_total counter\nsiwc_gateway_models_stale_responses_total 0\n# HELP siwc_gateway_sse_bytes_total SSE bytes relayed\n# TYPE siwc_gateway_sse_bytes_total counter\nsiwc_gateway_sse_bytes_total 8302\n# HELP siwc_gateway_inflight_requests In-flight responses requests\n# TYPE siwc_gateway_inflight_requests gauge\nsiwc_gateway_inflight_requests 0\n# HELP siwc_gateway_queued_requests Responses requests waiting for capacity\n# TYPE siwc_gateway_queued_requests gauge\nsiwc_gateway_queued_requests 0\n# HELP siwc_gateway_normalizer_active Active streaming JSON validators\n# TYPE siwc_gateway_normalizer_active gauge\nsiwc_gateway_normalizer_active 0\n# HELP siwc_gateway_upload_active Active body receive or upstream upload stages\n# TYPE siwc_gateway_upload_active gauge\nsiwc_gateway_upload_active 0\n# HELP siwc_gateway_upload_queued Requests waiting for an upload stage\n# TYPE siwc_gateway_upload_queued gauge\nsiwc_gateway_upload_queued 0\n# HELP siwc_gateway_normalizer_queued Streaming validators have no separate worker queue\n# TYPE siwc_gateway_normalizer_queued gauge\nsiwc_gateway_normalizer_queued 0\n# HELP siwc_gateway_upstream_uploads_active Open upstream request file streams\n# TYPE siwc_gateway_upstream_uploads_active gauge\nsiwc_gateway_upstream_uploads_active 0\n# HELP siwc_gateway_spool_reserved_bytes Disk capacity reserved for requests\n# TYPE siwc_gateway_spool_reserved_bytes gauge\nsiwc_gateway_spool_reserved_bytes 0\n# HELP siwc_gateway_spool_directories Active private request directories\n# TYPE siwc_gateway_spool_directories gauge\nsiwc_gateway_spool_directories 0\n# HELP siwc_gateway_normalizer_peak_rss_bytes Deprecated: no JSON child workers since 2.3; always zero\n# TYPE siwc_gateway_normalizer_peak_rss_bytes gauge\nsiwc_gateway_normalizer_peak_rss_bytes 0\n# HELP siwc_gateway_process_rss_bytes Gateway process RSS\n# TYPE siwc_gateway_process_rss_bytes gauge\nsiwc_gateway_process_rss_bytes 146206720\n# HELP siwc_gateway_request_wire_bytes_total Encoded request bytes received\n# TYPE siwc_gateway_request_wire_bytes_total counter\nsiwc_gateway_request_wire_bytes_total 41975637\n# HELP siwc_gateway_request_decoded_bytes_total Decoded request bytes received\n# TYPE siwc_gateway_request_decoded_bytes_total counter\nsiwc_gateway_request_decoded_bytes_total 125829303\n# HELP siwc_gateway_request_normalized_bytes_total Normalized request bytes forwarded\n# TYPE siwc_gateway_request_normalized_bytes_total counter\nsiwc_gateway_request_normalized_bytes_total 125796299\n# HELP siwc_gateway_active_streams Active SSE streams\n# TYPE siwc_gateway_active_streams gauge\nsiwc_gateway_active_streams 0\n# HELP siwc_gateway_uptime_seconds Uptime seconds\n# TYPE siwc_gateway_uptime_seconds gauge\nsiwc_gateway_uptime_seconds 177\n# HELP siwc_gateway_access_token_valid_seconds Seconds until the access token expires\n# TYPE siwc_gateway_access_token_valid_seconds gauge\nsiwc_gateway_access_token_valid_seconds 1924\n",
+  "productionSpoolEntries": 0,
+  "temporaryListenerPresent": false,
+  "testFilesCleaned": true
+}

@@ -13,24 +13,27 @@
  */
 import { createServer } from 'node:http'
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync, mkdirSync, unlinkSync, openSync, closeSync, writeSync, createReadStream, createWriteStream, rmSync, lstatSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, statfs } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
-import { Transform } from 'node:stream'
+import { existsSync, readFileSync, readdirSync, writeFileSync, renameSync, mkdirSync, rmSync, lstatSync } from 'node:fs'
+import { mkdir, mkdtemp, rm, statfs, open } from 'node:fs/promises'
+import { Transform, Writable, Readable } from 'node:stream'
+import { createStreamingNormalizer } from './streaming-json.mjs'
 import { pipeline, finished } from 'node:stream/promises'
 import * as zlib from 'node:zlib'
-import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { once } from 'node:events'
 
-const VERSION = '2.2.0'
+const VERSION = '2.3.0'
 const STORE_DIR = process.env.SIWC_STORE ?? join(process.env.HOME ?? '/root', '.dsh', 'siwc')
 const CRED_DIR = join(STORE_DIR, 'credentials')
 const PORT = Number(process.env.PORT ?? 1457)
 const HOST = process.env.HOST ?? '127.0.0.1'
 const API_BASE = (process.env.API_BASE ?? 'https://api.openai.com/v1').replace(/\/+$/, '')
 const GATEWAY_TOKEN = process.env.GATEWAY_TOKEN ?? ''
-const MAX_CONCURRENCY = Number(process.env.MAX_CONCURRENCY ?? 2)
+const MAX_CONCURRENCY = Number(process.env.MAX_RESPONSE_CONCURRENCY ?? process.env.MAX_CONCURRENCY ?? 8)
+const MAX_UPLOAD_CONCURRENCY = Number(process.env.MAX_UPLOAD_CONCURRENCY ?? 2)
+const MAX_UPLOAD_QUEUE = Number(process.env.MAX_UPLOAD_QUEUE ?? 8)
+const UPLOAD_QUEUE_WAIT_MS = Number(process.env.UPLOAD_QUEUE_WAIT_MS ?? 30_000)
+const UPSTREAM_UPLOAD_TIMEOUT_MS = Number(process.env.UPSTREAM_UPLOAD_TIMEOUT_MS ?? 300_000)
 const MAX_QUEUE = Number(process.env.MAX_QUEUE ?? 8)
 const QUEUE_WAIT_MS = Number(process.env.QUEUE_WAIT_MS ?? 30_000)
 const RATE_LIMIT_PER_MIN = Number(process.env.RATE_LIMIT_PER_MIN ?? 240)
@@ -46,15 +49,11 @@ const SSE_IDLE_TIMEOUT_MS = Number(process.env.SSE_IDLE_TIMEOUT_MS ?? 300_000)
 const MAX_WIRE_BODY_BYTES = Number(process.env.MAX_WIRE_BODY_BYTES ?? process.env.MAX_BODY_BYTES ?? 64 * 1024 * 1024)
 const MAX_DECODED_BODY_BYTES = Number(process.env.MAX_DECODED_BODY_BYTES ?? process.env.MAX_BODY_BYTES ?? 64 * 1024 * 1024)
 const MAX_NORMALIZED_BODY_BYTES = MAX_DECODED_BODY_BYTES + 64 * 1024
-const MAX_SPOOL_BYTES = Number(process.env.MAX_SPOOL_BYTES ?? 2 * (MAX_DECODED_BODY_BYTES + MAX_NORMALIZED_BODY_BYTES))
+const MAX_SPOOL_BYTES = Number(process.env.MAX_SPOOL_BYTES ?? MAX_CONCURRENCY * MAX_NORMALIZED_BODY_BYTES)
 const MIN_SPOOL_FREE_BYTES = Number(process.env.MIN_SPOOL_FREE_BYTES ?? 128 * 1024 * 1024)
 // STORE_DIR is on the service's writable disk. Do not use /tmp: it may be tmpfs.
 const SPOOL_DIR = process.env.SPOOL_DIR ?? join(STORE_DIR, 'request-spool')
-const NORMALIZE_TIMEOUT_MS = Number(process.env.NORMALIZE_TIMEOUT_MS ?? 30_000)
-const NORMALIZE_WAIT_MS = Number(process.env.NORMALIZE_WAIT_MS ?? 30_000)
-const NORMALIZE_HEAP_MIB = Number(process.env.NORMALIZE_HEAP_MIB ?? 224)
 const ZSTD_WINDOW_LOG_MAX = Number(process.env.ZSTD_WINDOW_LOG_MAX ?? 23)
-const SELF_FILE = fileURLToPath(import.meta.url)
 const TRUST_PROXY = process.env.TRUST_PROXY === '1'
 const TOKEN_URL = 'https://auth.openai.com/api/accounts/oauth/token'
 const RESOURCE = 'https://api.openai.com/v1'
@@ -62,83 +61,6 @@ const REFRESH_LEAD_MS = 120_000
 
 const UNSUPPORTED = ['background','conversation','max_output_tokens','max_tool_calls','metadata','moderation','multi_agent','prompt','prompt_cache_retention','safety_identifier','temperature','top_logprobs','top_p','truncation','user']
 const FORWARD_HEADERS = ['session-id', 'conversation_id', 'originator', 'x-client-request-id']
-
-/* ----------------------------- isolated, bounded JSON normalization worker */
-
-// This early mode never loads the account store or starts a network server.
-// The parent supplies only private file paths and a byte limit, not credentials.
-if (process.argv[2] === '--normalize-body') {
-  const result = normalizeBodyWorker(process.argv[3], process.argv[4], Number(process.argv[5]))
-  await new Promise((resolve) => process.stdout.write(JSON.stringify(result) + '\n', resolve))
-  process.exit(result.status ? 1 : 0)
-}
-
-function normalizeBodyWorker(inputPath, outputPath, maximumBytes) {
-  let fd
-  let bytes = 0
-  try {
-    let source = readFileSync(inputPath, 'utf8')
-    unlinkSync(inputPath)
-    global.gc?.()
-    let parsed
-    try { parsed = JSON.parse(source) } catch { return { status: 400, error: 'invalid JSON body' } }
-    source = null
-    global.gc?.()
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { status: 400, error: 'request body must be a JSON object' }
-    for (const field of UNSUPPORTED) delete parsed[field]
-    parsed.store = false
-    parsed.stream = true
-    fd = openSync(outputPath, 'wx', 0o600)
-    const write = (text) => {
-      bytes += Buffer.byteLength(text)
-      if (bytes > maximumBytes) throw Object.assign(new Error('normalized request exceeds byte limit'), { status: 413 })
-      const buffer = Buffer.from(text)
-      for (let offset = 0; offset < buffer.length;) offset += writeSync(fd, buffer, offset, buffer.length - offset)
-    }
-    const writeString = (text) => {
-      write('"')
-      for (let at = 0; at < text.length;) {
-        let end = Math.min(at + 64 * 1024, text.length)
-        // Keep a valid UTF-16 pair together. Lone surrogates remain escaped by
-        // JSON.stringify, exactly as they would in a whole-value serialization.
-        if (end < text.length && text.charCodeAt(end - 1) >= 0xd800 && text.charCodeAt(end - 1) <= 0xdbff && text.charCodeAt(end) >= 0xdc00 && text.charCodeAt(end) <= 0xdfff) end -= 1
-        write(JSON.stringify(text.slice(at, end)).slice(1, -1))
-        at = end
-      }
-      write('"')
-    }
-    const writeValue = (value, depth = 0) => {
-      if (depth > 256) throw Object.assign(new Error('JSON nesting exceeds processing limit'), { status: 413 })
-      if (value === null) return write('null')
-      if (typeof value === 'string') return writeString(value)
-      if (typeof value === 'number') return write(Number.isFinite(value) ? String(value) : 'null')
-      if (typeof value === 'boolean') return write(String(value))
-      if (Array.isArray(value)) {
-        write('[')
-        for (let i = 0; i < value.length; i++) { if (i) write(','); writeValue(value[i], depth + 1) }
-        return write(']')
-      }
-      write('{')
-      let first = true
-      for (const key of Object.keys(value)) {
-        if (!first) write(',')
-        first = false
-        writeString(key)
-        write(':')
-        writeValue(value[key], depth + 1)
-      }
-      write('}')
-    }
-    writeValue(parsed)
-    const model = typeof parsed.model === 'string' && /^[a-z0-9][a-z0-9_.:-]{0,127}$/i.test(parsed.model) ? parsed.model : undefined
-    return { bytes, model, peakRssBytes: process.resourceUsage().maxRSS * 1024 }
-  } catch (error) {
-    if (error.status) return { status: error.status, error: error.message }
-    return { status: 507, error: 'request spool could not be written' }
-  } finally {
-    if (fd !== undefined) closeSync(fd)
-  }
-}
 
 /* ------------------------------------------------------------------ logging */
 
@@ -180,6 +102,7 @@ const metrics = {
   requestDecodedBytes: 0,
   requestNormalizedBytes: 0,
   normalizerPeakRssBytes: 0,
+  normalizersActive: 0,
 }
 
 function loadRecord() {
@@ -312,7 +235,6 @@ function requestEncoding(req) {
 
 let spoolReservedBytes = 0
 const activeSpools = new Set()
-const activeWorkers = new Set()
 const activeControllers = new Set()
 const activeUploads = new Set()
 
@@ -320,7 +242,7 @@ async function reserveSpool(signal) {
   await mkdir(SPOOL_DIR, { recursive: true, mode: 0o700 })
   const disk = await statfs(SPOOL_DIR)
   signal.throwIfAborted()
-  const reservation = MAX_DECODED_BODY_BYTES + MAX_NORMALIZED_BODY_BYTES
+  const reservation = MAX_NORMALIZED_BODY_BYTES
   if (spoolReservedBytes + reservation > MAX_SPOOL_BYTES) throw requestFailure('request spool capacity is busy', 503, 'SPOOL_CAPACITY')
   if (disk.bavail * disk.bsize - spoolReservedBytes < MIN_SPOOL_FREE_BYTES + reservation) throw requestFailure('insufficient request spool disk space', 507, 'SPOOL_DISK')
   spoolReservedBytes += reservation
@@ -379,93 +301,125 @@ function cleanupStaleSpool() {
   if (removed) log('info', 'stale-request-spool-removed', { directories: removed })
 }
 
-async function receiveBody(req, path, encoding, controller) {
+// One producer, independent readers per attempt. Only committed disk bytes are
+// visible to a tail. Retain the final byte until *all* JSON/codec checks succeed.
+// This permits overlap without submitting a complete invalid request upstream.
+async function startBody(req, spool, encoding, controller) {
   const startedAt = Date.now()
-  let wireBytes = 0
-  let decodedBytes = 0
-  let idleTimer
-  const resetIdle = () => {
-    clearTimeout(idleTimer)
-    idleTimer = setTimeout(() => controller.abort(requestFailure('request upload idle timeout', 408, 'BODY_IDLE_TIMEOUT')), BODY_IDLE_TIMEOUT_MS)
+  const file = await open(spool.normalized, 'wx', 0o600)
+  const body = { path: spool.normalized, bytes: 0, wireBytes: 0, decodedBytes: 0, complete: false, error: null, uploads: new Set(), waiters: new Set() }
+  const notify = () => { for (const wake of body.waiters) wake(); body.waiters.clear() }
+  body.wait = (signal) => {
+    signal.throwIfAborted()
+    return new Promise((resolve, reject) => {
+      const wake = () => { signal.removeEventListener('abort', abort); body.waiters.delete(wake); resolve() }
+      const abort = () => { body.waiters.delete(wake); reject(signal.reason) }
+      body.waiters.add(wake)
+      signal.addEventListener('abort', abort, { once: true })
+    })
   }
+  let idleTimer
+  let wireMeter
+  const clearIdle = () => { clearTimeout(idleTimer); idleTimer = null }
+  const armIdle = () => {
+    clearIdle()
+    // readableFlowing=false means our disk/decoder backpressure paused req.
+    // Waiting on our own processing must not be blamed on the client.
+    if (!req.readableEnded && req.readableFlowing === true) idleTimer = setTimeout(() => controller.abort(requestFailure('request upload idle timeout', 408, 'BODY_IDLE_TIMEOUT')), BODY_IDLE_TIMEOUT_MS)
+  }
+  req.on('pause', clearIdle)
+  req.on('resume', armIdle)
+  req.on('end', clearIdle)
   const totalTimer = setTimeout(() => controller.abort(requestFailure('request upload total timeout', 408, 'BODY_TOTAL_TIMEOUT')), BODY_TOTAL_TIMEOUT_MS)
-  const wireMeter = new Transform({ transform(chunk, _encoding, done) {
-    resetIdle()
-    wireBytes += chunk.length
-    done(wireBytes > MAX_WIRE_BODY_BYTES ? requestFailure('encoded request exceeds byte limit', 413, 'WIRE_LIMIT') : null, chunk)
+  wireMeter = new Transform({ transform(chunk, _encoding, done) {
+    armIdle()
+    body.wireBytes += chunk.length
+    done(body.wireBytes > MAX_WIRE_BODY_BYTES ? requestFailure('encoded request exceeds byte limit', 413, 'WIRE_LIMIT') : null, chunk)
   } })
   const decodedMeter = new Transform({ transform(chunk, _encoding, done) {
-    decodedBytes += chunk.length
-    done(decodedBytes > MAX_DECODED_BODY_BYTES ? requestFailure('decoded request exceeds byte limit', 413, 'DECODED_LIMIT') : null, chunk)
+    body.decodedBytes += chunk.length
+    done(body.decodedBytes > MAX_DECODED_BODY_BYTES ? requestFailure('decoded request exceeds byte limit', 413, 'DECODED_LIMIT') : null, chunk)
   } })
   const decoder = encoding === 'gzip' ? zlib.createGunzip() : encoding === 'zstd' ? zlib.createZstdDecompress({ params: { [zlib.constants.ZSTD_d_windowLogMax]: ZSTD_WINDOW_LOG_MAX } }) : null
-  const output = createWriteStream(path, { flags: 'wx', mode: 0o600 })
-  resetIdle()
-  try {
-    // Keep req outside pipeline so a decode/size error can still return a
-    // controlled HTTP 400/413 instead of destroying its underlying socket.
-    const work = pipeline(wireMeter, ...(decoder ? [decoder] : []), decodedMeter, output, { signal: controller.signal })
-    req.pipe(wireMeter)
-    await work
-    if (encoding === 'zstd' && decoder.bytesWritten !== wireBytes) throw requestFailure('zstd request contains trailing data or multiple frames', 400, 'ZSTD_TRAILING_DATA')
-    return { wireBytes, decodedBytes, uploadMs: Date.now() - startedAt }
-  } catch (error) {
-    if (controller.signal.aborted) throw controller.signal.reason
-    if (error.status) throw error
-    if (error.code === 'ENOSPC' || error.code === 'EDQUOT') throw requestFailure('request spool disk is full', 507, 'SPOOL_DISK')
-    throw requestFailure(encoding === 'identity' ? 'request body could not be received' : 'invalid compressed request body', 400, 'BODY_DECODE')
-  } finally {
-    clearTimeout(idleTimer)
-    clearTimeout(totalTimer)
-    req.unpipe(wireMeter)
-    req.pause()
-    metrics.requestWireBytes += wireBytes
-    metrics.requestDecodedBytes += decodedBytes
-  }
+  const normalizer = createStreamingNormalizer({ unsupported: UNSUPPORTED, forbidden: ['previous_response_id'], maxBytes: MAX_NORMALIZED_BODY_BYTES })
+  const writer = new Writable({ write(chunk, _encoding, done) {
+    ;(async () => {
+      let offset = 0
+      while (offset < chunk.length) {
+        const { bytesWritten } = await file.write(chunk, offset, chunk.length - offset)
+        if (!bytesWritten) throw new Error('short request spool write')
+        offset += bytesWritten
+      }
+      body.bytes += chunk.length
+      notify()
+    })().then(() => done(), done)
+  } })
+  metrics.normalizersActive += 1
+  body.done = (async () => {
+    try {
+      // Keep req outside pipeline to return controlled validation errors.
+      const work = pipeline(wireMeter, ...(decoder ? [decoder] : []), decodedMeter, normalizer, writer, { signal: controller.signal })
+      req.pipe(wireMeter)
+      await work
+      if (encoding === 'zstd' && decoder.bytesWritten !== body.wireBytes) throw requestFailure('zstd request contains trailing data or multiple frames', 400, 'ZSTD_TRAILING_DATA')
+      await file.close()
+      body.complete = true
+      body.uploadMs = Date.now() - startedAt
+      body.model = normalizer.model
+      notify()
+      return body
+    } catch (error) {
+      if (controller.signal.aborted) error = controller.signal.reason
+      else if (!error.status) error = error.code === 'ENOSPC' || error.code === 'EDQUOT'
+        ? requestFailure('request spool disk is full', 507, 'SPOOL_DISK')
+        : requestFailure(encoding === 'identity' ? 'request body could not be received' : 'invalid compressed request body', 400, 'BODY_DECODE')
+      body.error = error
+      notify()
+      controller.abort(error)
+      throw error
+    } finally {
+      clearIdle()
+      clearTimeout(totalTimer)
+      req.off('pause', clearIdle); req.off('resume', armIdle); req.off('end', clearIdle)
+      req.unpipe(wireMeter)
+      req.pause()
+      await file.close().catch(() => {})
+      metrics.normalizersActive -= 1
+      metrics.requestWireBytes += body.wireBytes
+      metrics.requestDecodedBytes += body.decodedBytes
+      metrics.requestNormalizedBytes += body.bytes
+    }
+  })()
+  body.done.catch(() => {})
+  return body
 }
 
-async function normalizeBody(spool, signal) {
-  const waitingAt = Date.now()
-  const release = await normalizerGate.acquire(signal)
-  let child
-  try {
-    signal.throwIfAborted()
-    const startedAt = Date.now()
-    const result = await new Promise((resolve, reject) => {
-      child = spawn(process.execPath, [`--max-old-space-size=${NORMALIZE_HEAP_MIB}`, '--expose-gc', SELF_FILE, '--normalize-body', spool.decoded, spool.normalized, String(MAX_NORMALIZED_BODY_BYTES)], {
-        // The worker never needs network/account settings or gateway secrets.
-        env: { PATH: process.env.PATH ?? '', LANG: 'C.UTF-8' },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      })
-      activeWorkers.add(child)
-      let stdout = ''
-      let timedOut = false
-      const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL') }, NORMALIZE_TIMEOUT_MS)
-      const abort = () => child.kill('SIGKILL')
-      signal.addEventListener('abort', abort, { once: true })
-      child.stdout.on('data', (chunk) => { if (stdout.length < 4096) stdout += chunk.toString().slice(0, 4096 - stdout.length) })
-      // Drain fatal V8 diagnostics without retaining or logging any child text.
-      child.stderr.resume()
-      child.once('error', reject)
-      child.once('close', (code) => {
-        clearTimeout(timer)
-        signal.removeEventListener('abort', abort)
-        activeWorkers.delete(child)
-        if (signal.aborted) return reject(signal.reason)
-        if (timedOut) return reject(requestFailure('request normalization timeout', 503, 'NORMALIZE_TIMEOUT'))
-        let data
-        try { data = JSON.parse(stdout) } catch {}
-        if (code !== 0) return reject(requestFailure(data?.error ?? 'JSON request exceeds processing memory budget', data?.status ?? 413, 'NORMALIZE_FAILED'))
-        if (!data || !Number.isSafeInteger(data.bytes) || data.bytes < 1) return reject(requestFailure('request normalization failed', 503, 'NORMALIZE_FAILED'))
-        resolve(data)
-      })
-    })
-    metrics.normalizerPeakRssBytes = Math.max(metrics.normalizerPeakRssBytes, result.peakRssBytes ?? 0)
-    metrics.requestNormalizedBytes += result.bytes
-    return { ...result, path: spool.normalized, normalizeMs: Date.now() - startedAt, normalizeWaitMs: startedAt - waitingAt }
-  } finally {
-    release()
-  }
+function tailBody(body, signal) {
+  const stream = Readable.from((async function* () {
+    const file = await open(body.path, 'r')
+    let offset = 0
+    try {
+      while (true) {
+        signal.throwIfAborted()
+        if (body.error) throw body.error
+        const frontier = body.complete ? body.bytes : Math.max(0, body.bytes - 1)
+        if (offset < frontier) {
+          const buffer = Buffer.allocUnsafe(Math.min(64 * 1024, frontier - offset))
+          const { bytesRead } = await file.read(buffer, 0, buffer.length, offset)
+          if (!bytesRead) throw new Error('request spool unexpectedly ended')
+          offset += bytesRead
+          yield buffer.subarray(0, bytesRead)
+        } else if (body.complete) return
+        else await body.wait(signal)
+      }
+    } finally { await file.close() }
+  })(), { objectMode: false, highWaterMark: 64 * 1024, signal })
+  const upload = { stream, done: finished(stream, { cleanup: true }) }
+  upload.done.catch(() => {})
+  body.uploads.add(upload)
+  activeUploads.add(stream)
+  stream.once('close', () => { body.uploads.delete(upload); activeUploads.delete(stream) })
+  return upload
 }
 
 function waitWithSignal(promise, signal) {
@@ -549,7 +503,7 @@ const requestGate = createGate(MAX_CONCURRENCY, MAX_QUEUE, QUEUE_WAIT_MS, (activ
   metrics.inflight = active
   metrics.peakInflight = Math.max(metrics.peakInflight, active)
 })
-const normalizerGate = createGate(1, Math.max(1, MAX_CONCURRENCY), NORMALIZE_WAIT_MS)
+const uploadGate = createGate(MAX_UPLOAD_CONCURRENCY, MAX_UPLOAD_QUEUE, UPLOAD_QUEUE_WAIT_MS)
 
 /* --------------------------------------------------------------- upstream */
 
@@ -671,48 +625,68 @@ async function readUpstreamErrorBody(upstream, controller, reqId) {
   }
 }
 
-async function openUpstreamStream(body, originalHeaders, controller) {
-  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'Content-Length': String(body.bytes) }
+async function openUpstreamStream(body, originalHeaders, controller, firstRelease) {
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' }
   for (const name of FORWARD_HEADERS) {
     const value = originalHeaders[name]
     if (typeof value === 'string' && value.length > 0) headers[name] = value
   }
   const token = await waitWithSignal(accessToken(false), controller.signal)
-  const send = async (accessTokenValue) => {
-    const stream = createReadStream(body.path, { highWaterMark: 64 * 1024, signal: controller.signal })
-    const uploadDone = finished(stream, { cleanup: true })
-    uploadDone.catch(() => {})
-    const upload = { stream, done: uploadDone }
-    body.uploads ??= new Set()
-    body.uploads.add(upload)
-    activeUploads.add(stream)
-    stream.once('close', () => { body.uploads.delete(upload); activeUploads.delete(stream) })
+  const send = async (accessTokenValue, release, replay = false) => {
+    const attempt = new AbortController()
+    const signal = AbortSignal.any([controller.signal, attempt.signal])
+    const upload = tailBody(body, signal)
+    let headersReceived = false
+    let headersTimer
+    const uploadTimer = setTimeout(() => controller.abort(requestFailure('upstream upload timeout', 504, 'UPSTREAM_UPLOAD_TIMEOUT')), UPSTREAM_UPLOAD_TIMEOUT_MS)
+    const clearTimers = () => { clearTimeout(uploadTimer); clearTimeout(headersTimer) }
+    signal.addEventListener('abort', clearTimers, { once: true })
+    const uploaded = Promise.allSettled([body.done, upload.done]).then((results) => {
+      clearTimeout(uploadTimer)
+      if (results.some((result) => result.status === 'rejected') || headersReceived || signal.aborted) return
+      headersTimer = setTimeout(() => controller.abort(requestFailure('upstream headers timeout', 504, 'HEADERS_TIMEOUT')), UPSTREAM_HEADERS_TIMEOUT_MS)
+    }).finally(release)
+    uploaded.catch(() => {})
+    let response
     try {
-      // fetch resolves at response headers, not upload EOF. Do not destroy a
-      // live upload here: Node 22 can abort the already-returned response too.
-      return await fetchUpstream(API_BASE + '/responses', {
+      response = await fetchUpstream(API_BASE + '/responses', {
         method: 'POST',
-        headers: upstreamHeaders(accessTokenValue, headers),
-        body: stream,
+        headers: upstreamHeaders(accessTokenValue, replay ? { ...headers, 'Content-Length': String(body.bytes) } : headers),
+        body: upload.stream,
         duplex: 'half',
-        signal: controller.signal,
+        signal,
       })
+      return { response, attempt, upload }
     } catch (error) {
-      stream.destroy()
-      await uploadDone.catch(() => {})
+      attempt.abort(error)
+      upload.stream.destroy()
+      if (controller.signal.aborted) throw controller.signal.reason
+      if (signal.aborted && signal.reason?.status) throw signal.reason
       throw error
+    } finally {
+      headersReceived = true
+      clearTimeout(headersTimer)
+      // Do not destroy an upload when headers arrive. Node 22 can thereby
+      // truncate the response. Caller consumes/cancels response first.
+      // Prevent an EOF microtask from re-arming the headers timer afterwards.
+      uploaded.finally(() => { clearTimers(); signal.removeEventListener('abort', clearTimers) }).catch(() => {})
     }
   }
-  let upstream = await send(token)
-  if (upstream.status === 401) {
+  let current = await send(token, firstRelease)
+  if (current.response.status === 401) {
     log('warn', 'upstream-401-refresh-retry', {})
-    // Undici cancels this attempt's upload with the response body. Do not abort
-    // the shared controller: OAuth refresh and the new file stream still need it.
-    await upstream.body?.cancel().catch(() => {})
+    await current.response.body?.cancel().catch(() => {})
+    current.attempt.abort()
+    current.upload.stream.destroy()
+    await current.upload.done.catch(() => {})
+    // The failed attempt owns only its reader, never the shared producer.
+    // Replay begins only once the complete, validated body is on disk.
+    await body.done
     const fresh = await waitWithSignal(accessToken(true, token), controller.signal)
-    upstream = await send(fresh)
+    const release = await uploadGate.acquire(controller.signal)
+    current = await send(fresh, release, true)
   }
-  return upstream
+  return current.response
 }
 
 async function handleResponses(req, res, ip, reqId) {
@@ -724,7 +698,7 @@ async function handleResponses(req, res, ip, reqId) {
   let spool = null
   let normalized = null
   let uploadCleanup = null
-  let headersTimer = null
+  let releaseUpload = null
   const onClientGone = () => {
     if (!res.writableEnded) {
       clientGone = true
@@ -740,17 +714,15 @@ async function handleResponses(req, res, ip, reqId) {
     const encoding = requestEncoding(req)
     release = await requestGate.acquire(controller.signal)
     controller.signal.throwIfAborted()
+    releaseUpload = await uploadGate.acquire(controller.signal)
     spool = await reserveSpool(controller.signal)
-    const received = await receiveBody(req, spool.decoded, encoding, controller)
-    normalized = await normalizeBody(spool, controller.signal)
-    log('info', 'request-prepared', { reqId, encoding, ...received, normalizedBytes: normalized.bytes, normalizeMs: normalized.normalizeMs, normalizeWaitMs: normalized.normalizeWaitMs, workerPeakRssBytes: normalized.peakRssBytes })
-
-    headersTimer = setTimeout(() => {
-      controller.abort(Object.assign(new Error('upstream headers timeout'), { code: 'HEADERS_TIMEOUT' }))
-    }, UPSTREAM_HEADERS_TIMEOUT_MS)
-    const upstream = await openUpstreamStream(normalized, req.headers, controller)
-    clearTimeout(headersTimer)
-    headersTimer = null
+    normalized = await startBody(req, spool, encoding, controller)
+    const firstRelease = releaseUpload
+    normalized.done.then((body) => log('info', 'request-prepared', { reqId, encoding, wireBytes: body.wireBytes, decodedBytes: body.decodedBytes, normalizedBytes: body.bytes, uploadMs: body.uploadMs, streaming: true })).catch(() => {})
+    const upstream = await openUpstreamStream(normalized, req.headers, controller, firstRelease)
+    // Real inference consumes a complete request. Even an unusual early 200
+    // must not bypass local JSON, codec integrity or size validation.
+    if (upstream.ok) await normalized.done
     // A successful peer can start SSE before reading its complete request.
     // Close upload FDs before deleting files, without delaying early SSE. Error
     // responses keep their spool until their body is consumed in the branch below.
@@ -765,7 +737,7 @@ async function handleResponses(req, res, ip, reqId) {
       reqId,
       status: upstream.status,
       connectMs: Date.now() - startedAt,
-      bytesIn: received.decodedBytes,
+      bytesIn: normalized.decodedBytes,
       normalizedBytes: normalized.bytes,
       model: normalized.model,
     })
@@ -811,6 +783,7 @@ async function handleResponses(req, res, ip, reqId) {
     res.end()
     log('info', 'stream-complete', { reqId, bytes, ms: Date.now() - startedAt })
   } catch (error) {
+    if (controller.signal.aborted && controller.signal.reason?.status) error = controller.signal.reason
     const code = (error && error.code) || ''
     if (clientGone || code === 'CLIENT_GONE') {
       log('warn', 'client-disconnected', { reqId, ms: Date.now() - startedAt })
@@ -829,17 +802,17 @@ async function handleResponses(req, res, ip, reqId) {
       json(res, status, { error: { message } }, headers)
     } else res.destroy()
   } finally {
-    clearTimeout(headersTimer)
     // A peer can finish an error or SSE response without reading our complete
     // request. Abort only after consuming that response, then await FD closure.
     controller.abort()
+    if (normalized) await normalized.done.catch(() => {})
     if (normalized?.uploads) await Promise.all([...normalized.uploads].map((upload) => upload.done.catch(() => {})))
     if (uploadCleanup) await uploadCleanup
     activeControllers.delete(controller)
     req.off('aborted', onClientGone)
     req.off('error', onClientGone)
     res.off('close', onClientGone)
-    try { if (spool) await cleanupSpoolSafely(spool, reqId) } finally { release?.() }
+    try { if (spool) await cleanupSpoolSafely(spool, reqId) } finally { releaseUpload?.(); release?.() }
   }
 }
 
@@ -871,12 +844,14 @@ function metricsText() {
   counter('siwc_gateway_sse_bytes_total', 'SSE bytes relayed', metrics.sseBytes)
   gauge('siwc_gateway_inflight_requests', 'In-flight responses requests', metrics.inflight)
   gauge('siwc_gateway_queued_requests', 'Responses requests waiting for capacity', requestGate.queued)
-  gauge('siwc_gateway_normalizer_active', 'JSON normalization workers active', normalizerGate.active)
-  gauge('siwc_gateway_normalizer_queued', 'Requests waiting for JSON normalization', normalizerGate.queued)
+  gauge('siwc_gateway_normalizer_active', 'Active streaming JSON validators', metrics.normalizersActive)
+  gauge('siwc_gateway_upload_active', 'Active body receive or upstream upload stages', uploadGate.active)
+  gauge('siwc_gateway_upload_queued', 'Requests waiting for an upload stage', uploadGate.queued)
+  gauge('siwc_gateway_normalizer_queued', 'Streaming validators have no separate worker queue', 0)
   gauge('siwc_gateway_upstream_uploads_active', 'Open upstream request file streams', activeUploads.size)
   gauge('siwc_gateway_spool_reserved_bytes', 'Disk capacity reserved for requests', spoolReservedBytes)
   gauge('siwc_gateway_spool_directories', 'Active private request directories', activeSpools.size)
-  gauge('siwc_gateway_normalizer_peak_rss_bytes', 'Largest completed worker peak RSS', metrics.normalizerPeakRssBytes)
+  gauge('siwc_gateway_normalizer_peak_rss_bytes', 'Deprecated: no JSON child workers since 2.3; always zero', metrics.normalizerPeakRssBytes)
   gauge('siwc_gateway_process_rss_bytes', 'Gateway process RSS', process.memoryUsage().rss)
   counter('siwc_gateway_request_wire_bytes_total', 'Encoded request bytes received', metrics.requestWireBytes)
   counter('siwc_gateway_request_decoded_bytes_total', 'Decoded request bytes received', metrics.requestDecodedBytes)
@@ -985,7 +960,6 @@ function shutdown(signal) {
   setTimeout(() => {
     log('warn', 'shutdown-forced', {})
     for (const controller of activeControllers) controller.abort(requestFailure('gateway shutting down', 503, 'SHUTDOWN'))
-    for (const child of activeWorkers) child.kill('SIGKILL')
     for (const socket of activeSockets) socket.destroy()
     for (const dir of activeSpools) { try { rmSync(dir, { recursive: true, force: true }) } catch {} }
     process.exit(0)
@@ -1016,7 +990,7 @@ server.listen(PORT, HOST, () => {
     maxQueue: MAX_QUEUE,
     maxWireBodyBytes: MAX_WIRE_BODY_BYTES,
     maxDecodedBodyBytes: MAX_DECODED_BODY_BYTES,
-    normalizeHeapMiB: NORMALIZE_HEAP_MIB,
+    maxUploadConcurrency: MAX_UPLOAD_CONCURRENCY,
     rateLimitPerMin: RATE_LIMIT_PER_MIN,
   })
 })

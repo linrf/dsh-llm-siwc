@@ -9,7 +9,7 @@ DSH**。
 
 已针对线上服务验证，日期 2026-10-08。
 
-VM 网关源码、部署模板与测试见 [gateway/](gateway/README.md)；本轮 DSH 修复与 2026-11-01 验收范围见 [改造记录](docs/changes-2026-11-01.md)。
+VM 网关源码、部署模板与测试见 [gateway/](gateway/README.md)；本轮 DSH 修复与 2026-11-01 验收范围见 [改造记录](docs/changes-2026-11-01.md)；2.3.0 边收边转与分阶段并发见 [流式改造验收](docs/streaming-2026-11-01.md)。
 
 ## 环境要求
 

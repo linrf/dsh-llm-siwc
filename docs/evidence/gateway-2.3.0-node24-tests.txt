@@ -1,0 +1,68 @@
+
+> dsh-llm-siwc@0.1.0 test:gateway
+> node --test gateway/siwc-gateway-v2.test.mjs gateway/streaming-json.test.mjs
+
+✔ a failed refresh does not prevent a later HTTP request from refreshing (100.742334ms)
+✔ concurrent expired credentials share one refresh (157.512458ms)
+✔ concurrent 401s reuse one rotated token, including a late old-token 401 (193.05425ms)
+✔ waiting capacity is bounded and a disconnected waiter never opens upstream (104.441041ms)
+✔ queue timeout and body rejection release capacity for the next request (173.922833ms)
+✔ disconnects during upload and streaming release their occupied slot (103.844167ms)
+✔ model refresh is shared, serves bounded stale data on failure, then recovers (791.993459ms)
+✔ 20MiB identity request is normalized without changing its content (146.28025ms)
+ℹ {"sizeMiB":20,"encoding":"identity","mixed":false,"wireBytes":20971520,"parentPeakRss":96190464,"workerPeakRss":0}
+✔ 30MiB gzip request is normalized without changing its content (263.078292ms)
+ℹ {"sizeMiB":30,"encoding":"gzip","mixed":false,"wireBytes":30685,"parentPeakRss":117473280,"workerPeakRss":0}
+✔ 50MiB zstd request is normalized without changing its content (333.37425ms)
+ℹ {"sizeMiB":50,"encoding":"zstd","mixed":false,"wireBytes":1710,"parentPeakRss":144834560,"workerPeakRss":0}
+✔ 50MiB identity mixed Unicode request is normalized without changing its content (236.333791ms)
+ℹ {"sizeMiB":50,"encoding":"identity","mixed":true,"wireBytes":52428800,"parentPeakRss":140443648,"workerPeakRss":0}
+✔ two concurrent 50MiB bodies use bounded streaming validators and leave no spool files during SSE (344.971625ms)
+ℹ {"sizeMiB":"2x50 mixed Unicode","parentPeakRss":196935680,"workerPeakRss":0,"maximumWorkers":2}
+✔ string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics (74.856875ms)
+✔ unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned (167.935ms)
+✔ wire quota and disk reservation fail without leaking capacity (135.746084ms)
+✔ upload idle and total deadlines are separate and always clean disk and slots (405.948875ms)
+✔ cancelling a large request during streaming validation stops the producer and frees resources (115.330708ms)
+✔ startup removes abandoned private request files and preserves unrelated spool entries (48.892167ms)
+✔ an early upstream 401 replays a large file with the new token (114.648375ms)
+✔ gzip members decode together while zstd decoder window remains bounded (155.5415ms)
+✔ spooled data is private and normalized bytes are removed before SSE streaming (76.3435ms)
+✔ early upstream 400 is delivered completely and its unread upload is closed (105.095583ms)
+✔ early upstream 200 is delivered completely and its unread upload is closed (155.602791ms)
+✔ upstream error body byte limit preserves status and Retry-After without retaining body data (91.684167ms)
+✔ upstream error body deadline preserves status and Retry-After without retaining body data (164.339042ms)
+✔ identity is forwarded before client EOF; IDs and cache headers survive (74.566042ms)
+✔ gzip is forwarded before client EOF; IDs and cache headers survive (74.272708ms)
+✔ zstd is forwarded before client EOF; IDs and cache headers survive (74.411916ms)
+✔ long SSE and waiting headers do not occupy upload slots (100.819666ms)
+✔ upload queue is bounded and cancellation removes its waiter (108.348417ms)
+✔ early 401 preserves a still-uploading producer and replays the complete validated body (87.280458ms)
+✔ json-tail failure never commits a complete JSON request upstream (80.306667ms)
+✔ gzip-crc failure never commits a complete JSON request upstream (84.032375ms)
+✔ zstd-tail failure never commits a complete JSON request upstream (85.601583ms)
+✔ decoded-limit failure never commits a complete JSON request upstream (81.863167ms)
+✔ headers deadline starts after upload, while an actual header stall times out (359.807334ms)
+✔ an upstream that never reads a body has a bounded upload deadline (240.81875ms)
+✔ an early success cannot hide malformed input received later (88.458625ms)
+✔ cancelling after an early 401 stops producer and avoids a replay (85.102958ms)
+✔ cancelling a 401 replay closes its upload and releases its stage (115.321584ms)
+✔ early 200 does not disable the upstream upload deadline for a stalled client (197.309166ms)
+✔ previous_response_id is explicitly rejected so incremental history is never silently lost (79.931042ms)
+✔ rewrites only top-level fields and preserves all retained item IDs and lexical bytes (4.8935ms)
+✔ empty objects, duplicate keys and escaped omitted names have JSON last-value semantics (1.455291ms)
+✔ chunk boundaries preserve UTF-8, escape sequences, unpaired escaped surrogates and long keys (408.851042ms)
+✔ all nested values including omitted fields are strictly validated (8.191291ms)
+✔ malformed UTF-8 is rejected including split sequences and discarded fields (1.563041ms)
+✔ depth and normalized byte limits fail with 413 (0.677292ms)
+✔ forwards a prefix immediately but withholds a complete root until validated EOF (0.15025ms)
+✔ a large value and huge omitted string are processed chunk by chunk with bounded buffering (69.306833ms)
+✔ random valid JSON and deterministic malformed mutations agree with JSON.parse (53.401959ms)
+ℹ tests 51
+ℹ suites 0
+ℹ pass 51
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6835.0645

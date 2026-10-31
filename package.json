@@ -30,7 +30,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.ts",
-    "test:gateway": "node --test gateway/siwc-gateway-v2.test.mjs"
+    "test:gateway": "node --test gateway/siwc-gateway-v2.test.mjs gateway/streaming-json.test.mjs"
   },
   "engines": {
     "node": ">=22.19.0"

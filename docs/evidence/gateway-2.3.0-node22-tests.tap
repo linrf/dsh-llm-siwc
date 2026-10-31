@@ -1,0 +1,321 @@
+TAP version 13
+# Subtest: a failed refresh does not prevent a later HTTP request from refreshing
+ok 1 - a failed refresh does not prevent a later HTTP request from refreshing
+  ---
+  duration_ms: 591.461768
+  type: 'test'
+  ...
+# Subtest: concurrent expired credentials share one refresh
+ok 2 - concurrent expired credentials share one refresh
+  ---
+  duration_ms: 504.836367
+  type: 'test'
+  ...
+# Subtest: concurrent 401s reuse one rotated token, including a late old-token 401
+ok 3 - concurrent 401s reuse one rotated token, including a late old-token 401
+  ---
+  duration_ms: 414.408797
+  type: 'test'
+  ...
+# Subtest: waiting capacity is bounded and a disconnected waiter never opens upstream
+ok 4 - waiting capacity is bounded and a disconnected waiter never opens upstream
+  ---
+  duration_ms: 220.190448
+  type: 'test'
+  ...
+# Subtest: queue timeout and body rejection release capacity for the next request
+ok 5 - queue timeout and body rejection release capacity for the next request
+  ---
+  duration_ms: 326.566355
+  type: 'test'
+  ...
+# Subtest: disconnects during upload and streaming release their occupied slot
+ok 6 - disconnects during upload and streaming release their occupied slot
+  ---
+  duration_ms: 242.849035
+  type: 'test'
+  ...
+# Subtest: model refresh is shared, serves bounded stale data on failure, then recovers
+ok 7 - model refresh is shared, serves bounded stale data on failure, then recovers
+  ---
+  duration_ms: 952.841773
+  type: 'test'
+  ...
+# Subtest: 20MiB identity request is normalized without changing its content
+ok 8 - 20MiB identity request is normalized without changing its content
+  ---
+  duration_ms: 980.702086
+  type: 'test'
+  ...
+# {"sizeMiB":20,"encoding":"identity","mixed":false,"wireBytes":20971520,"parentPeakRss":95895552,"workerPeakRss":0}
+# Subtest: 30MiB gzip request is normalized without changing its content
+ok 9 - 30MiB gzip request is normalized without changing its content
+  ---
+  duration_ms: 2071.625594
+  type: 'test'
+  ...
+# {"sizeMiB":30,"encoding":"gzip","mixed":false,"wireBytes":30685,"parentPeakRss":109953024,"workerPeakRss":0}
+# Subtest: 50MiB zstd request is normalized without changing its content
+ok 10 - 50MiB zstd request is normalized without changing its content
+  ---
+  duration_ms: 2882.367132
+  type: 'test'
+  ...
+# {"sizeMiB":50,"encoding":"zstd","mixed":false,"wireBytes":1710,"parentPeakRss":133353472,"workerPeakRss":0}
+# Subtest: 50MiB identity mixed Unicode request is normalized without changing its content
+ok 11 - 50MiB identity mixed Unicode request is normalized without changing its content
+  ---
+  duration_ms: 1834.192092
+  type: 'test'
+  ...
+# {"sizeMiB":50,"encoding":"identity","mixed":true,"wireBytes":52428800,"parentPeakRss":132046848,"workerPeakRss":0}
+# Subtest: two concurrent 50MiB bodies use bounded streaming validators and leave no spool files during SSE
+ok 12 - two concurrent 50MiB bodies use bounded streaming validators and leave no spool files during SSE
+  ---
+  duration_ms: 4187.434924
+  type: 'test'
+  ...
+# {"sizeMiB":"2x50 mixed Unicode","parentPeakRss":189267968,"workerPeakRss":0,"maximumWorkers":2}
+# Subtest: string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics
+ok 13 - string chunks preserve escapes, surrogate pairs, long keys, and JSON number semantics
+  ---
+  duration_ms: 257.801836
+  type: 'test'
+  ...
+# Subtest: unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned
+ok 14 - unknown encodings, corrupt compression, zstd trailing frames and decoded bombs are rejected and cleaned
+  ---
+  duration_ms: 520.848664
+  type: 'test'
+  ...
+# Subtest: wire quota and disk reservation fail without leaking capacity
+ok 15 - wire quota and disk reservation fail without leaking capacity
+  ---
+  duration_ms: 386.996419
+  type: 'test'
+  ...
+# Subtest: upload idle and total deadlines are separate and always clean disk and slots
+ok 16 - upload idle and total deadlines are separate and always clean disk and slots
+  ---
+  duration_ms: 633.162702
+  type: 'test'
+  ...
+# Subtest: cancelling a large request during streaming validation stops the producer and frees resources
+ok 17 - cancelling a large request during streaming validation stops the producer and frees resources
+  ---
+  duration_ms: 479.314483
+  type: 'test'
+  ...
+# Subtest: startup removes abandoned private request files and preserves unrelated spool entries
+ok 18 - startup removes abandoned private request files and preserves unrelated spool entries
+  ---
+  duration_ms: 114.456264
+  type: 'test'
+  ...
+# Subtest: an early upstream 401 replays a large file with the new token
+ok 19 - an early upstream 401 replays a large file with the new token
+  ---
+  duration_ms: 807.002971
+  type: 'test'
+  ...
+# Subtest: gzip members decode together while zstd decoder window remains bounded
+ok 20 - gzip members decode together while zstd decoder window remains bounded
+  ---
+  duration_ms: 452.995023
+  type: 'test'
+  ...
+# Subtest: spooled data is private and normalized bytes are removed before SSE streaming
+ok 21 - spooled data is private and normalized bytes are removed before SSE streaming
+  ---
+  duration_ms: 233.448041
+  type: 'test'
+  ...
+# Subtest: early upstream 400 is delivered completely and its unread upload is closed
+ok 22 - early upstream 400 is delivered completely and its unread upload is closed
+  ---
+  duration_ms: 319.36358
+  type: 'test'
+  ...
+# Subtest: early upstream 200 is delivered completely and its unread upload is closed
+ok 23 - early upstream 200 is delivered completely and its unread upload is closed
+  ---
+  duration_ms: 688.873692
+  type: 'test'
+  ...
+# Subtest: upstream error body byte limit preserves status and Retry-After without retaining body data
+ok 24 - upstream error body byte limit preserves status and Retry-After without retaining body data
+  ---
+  duration_ms: 199.938594
+  type: 'test'
+  ...
+# Subtest: upstream error body deadline preserves status and Retry-After without retaining body data
+ok 25 - upstream error body deadline preserves status and Retry-After without retaining body data
+  ---
+  duration_ms: 257.884201
+  type: 'test'
+  ...
+# Subtest: identity is forwarded before client EOF; IDs and cache headers survive
+ok 26 - identity is forwarded before client EOF; IDs and cache headers survive
+  ---
+  duration_ms: 214.046911
+  type: 'test'
+  ...
+# Subtest: gzip is forwarded before client EOF; IDs and cache headers survive
+ok 27 - gzip is forwarded before client EOF; IDs and cache headers survive
+  ---
+  duration_ms: 244.530487
+  type: 'test'
+  ...
+# Subtest: zstd is forwarded before client EOF; IDs and cache headers survive
+ok 28 - zstd is forwarded before client EOF; IDs and cache headers survive
+  ---
+  duration_ms: 243.654555
+  type: 'test'
+  ...
+# Subtest: long SSE and waiting headers do not occupy upload slots
+ok 29 - long SSE and waiting headers do not occupy upload slots
+  ---
+  duration_ms: 414.483628
+  type: 'test'
+  ...
+# Subtest: upload queue is bounded and cancellation removes its waiter
+ok 30 - upload queue is bounded and cancellation removes its waiter
+  ---
+  duration_ms: 278.777428
+  type: 'test'
+  ...
+# Subtest: early 401 preserves a still-uploading producer and replays the complete validated body
+ok 31 - early 401 preserves a still-uploading producer and replays the complete validated body
+  ---
+  duration_ms: 333.857953
+  type: 'test'
+  ...
+# Subtest: json-tail failure never commits a complete JSON request upstream
+ok 32 - json-tail failure never commits a complete JSON request upstream
+  ---
+  duration_ms: 222.996318
+  type: 'test'
+  ...
+# Subtest: gzip-crc failure never commits a complete JSON request upstream
+ok 33 - gzip-crc failure never commits a complete JSON request upstream
+  ---
+  duration_ms: 218.69779
+  type: 'test'
+  ...
+# Subtest: zstd-tail failure never commits a complete JSON request upstream
+ok 34 - zstd-tail failure never commits a complete JSON request upstream
+  ---
+  duration_ms: 210.86731
+  type: 'test'
+  ...
+# Subtest: decoded-limit failure never commits a complete JSON request upstream
+ok 35 - decoded-limit failure never commits a complete JSON request upstream
+  ---
+  duration_ms: 196.338164
+  type: 'test'
+  ...
+# Subtest: headers deadline starts after upload, while an actual header stall times out
+ok 36 - headers deadline starts after upload, while an actual header stall times out
+  ---
+  duration_ms: 481.770998
+  type: 'test'
+  ...
+# Subtest: an upstream that never reads a body has a bounded upload deadline
+ok 37 - an upstream that never reads a body has a bounded upload deadline
+  ---
+  duration_ms: 398.553834
+  type: 'test'
+  ...
+# Subtest: an early success cannot hide malformed input received later
+ok 38 - an early success cannot hide malformed input received later
+  ---
+  duration_ms: 216.603504
+  type: 'test'
+  ...
+# Subtest: cancelling after an early 401 stops producer and avoids a replay
+ok 39 - cancelling after an early 401 stops producer and avoids a replay
+  ---
+  duration_ms: 199.54761
+  type: 'test'
+  ...
+# Subtest: cancelling a 401 replay closes its upload and releases its stage
+ok 40 - cancelling a 401 replay closes its upload and releases its stage
+  ---
+  duration_ms: 397.046039
+  type: 'test'
+  ...
+# Subtest: early 200 does not disable the upstream upload deadline for a stalled client
+ok 41 - early 200 does not disable the upstream upload deadline for a stalled client
+  ---
+  duration_ms: 304.223831
+  type: 'test'
+  ...
+# Subtest: previous_response_id is explicitly rejected so incremental history is never silently lost
+ok 42 - previous_response_id is explicitly rejected so incremental history is never silently lost
+  ---
+  duration_ms: 212.338689
+  type: 'test'
+  ...
+# Subtest: rewrites only top-level fields and preserves all retained item IDs and lexical bytes
+ok 43 - rewrites only top-level fields and preserves all retained item IDs and lexical bytes
+  ---
+  duration_ms: 30.819826
+  type: 'test'
+  ...
+# Subtest: empty objects, duplicate keys and escaped omitted names have JSON last-value semantics
+ok 44 - empty objects, duplicate keys and escaped omitted names have JSON last-value semantics
+  ---
+  duration_ms: 19.047608
+  type: 'test'
+  ...
+# Subtest: chunk boundaries preserve UTF-8, escape sequences, unpaired escaped surrogates and long keys
+ok 45 - chunk boundaries preserve UTF-8, escape sequences, unpaired escaped surrogates and long keys
+  ---
+  duration_ms: 2244.476597
+  type: 'test'
+  ...
+# Subtest: all nested values including omitted fields are strictly validated
+ok 46 - all nested values including omitted fields are strictly validated
+  ---
+  duration_ms: 77.599551
+  type: 'test'
+  ...
+# Subtest: malformed UTF-8 is rejected including split sequences and discarded fields
+ok 47 - malformed UTF-8 is rejected including split sequences and discarded fields
+  ---
+  duration_ms: 15.618951
+  type: 'test'
+  ...
+# Subtest: depth and normalized byte limits fail with 413
+ok 48 - depth and normalized byte limits fail with 413
+  ---
+  duration_ms: 7.301367
+  type: 'test'
+  ...
+# Subtest: forwards a prefix immediately but withholds a complete root until validated EOF
+ok 49 - forwards a prefix immediately but withholds a complete root until validated EOF
+  ---
+  duration_ms: 1.324744
+  type: 'test'
+  ...
+# Subtest: a large value and huge omitted string are processed chunk by chunk with bounded buffering
+ok 50 - a large value and huge omitted string are processed chunk by chunk with bounded buffering
+  ---
+  duration_ms: 437.292847
+  type: 'test'
+  ...
+# Subtest: random valid JSON and deterministic malformed mutations agree with JSON.parse
+ok 51 - random valid JSON and deterministic malformed mutations agree with JSON.parse
+  ---
+  duration_ms: 626.800637
+  type: 'test'
+  ...
+1..51
+# tests 51
+# suites 0
+# pass 51
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 29046.910246

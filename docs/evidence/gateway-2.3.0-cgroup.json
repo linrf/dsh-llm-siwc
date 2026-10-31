@@ -1,0 +1,177 @@
+{
+  "node": "v22.22.0",
+  "memoryMax": 536870912,
+  "memorySwapMax": 0,
+  "cgroupPeakBytes": 245092352,
+  "events": "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "ingressPort": 21458,
+  "prefixReachedBeforeClientEof": true,
+  "largeUploadWhileTwoSseOpen": true,
+  "heldSseResourceMetrics": {
+    "requests_total": 10,
+    "models_requests_total": 0,
+    "responses_requests_total": 9,
+    "upstream_calls_total": 9,
+    "upstream_errors_total": 0,
+    "token_refreshes_total": 0,
+    "token_refresh_failures_total": 0,
+    "models_cache_hits_total": 0,
+    "models_cache_misses_total": 0,
+    "models_refresh_failures_total": 0,
+    "models_stale_responses_total": 0,
+    "sse_bytes_total": 411,
+    "inflight_requests": 2,
+    "queued_requests": 0,
+    "normalizer_active": 0,
+    "upload_active": 0,
+    "upload_queued": 0,
+    "normalizer_queued": 0,
+    "upstream_uploads_active": 0,
+    "spool_reserved_bytes": 0,
+    "spool_directories": 0,
+    "normalizer_peak_rss_bytes": 0,
+    "process_rss_bytes": 186851328,
+    "request_wire_bytes_total": 262209805,
+    "request_decoded_bytes_total": 262209805,
+    "request_normalized_bytes_total": 262209598,
+    "active_streams": 2,
+    "uptime_seconds": 8,
+    "access_token_valid_seconds": 3592
+  },
+  "sseCancellationReachedUpstream": true,
+  "checks": [
+    {
+      "key": "stream-before-complete",
+      "status": 200,
+      "sseComplete": true,
+      "ms": 72
+    },
+    {
+      "key": "single-20",
+      "mib": 20,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 691
+    },
+    {
+      "key": "single-30",
+      "mib": 30,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 981
+    },
+    {
+      "key": "single-50",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1375
+    },
+    {
+      "key": "mixed-unicode-50",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1194
+    },
+    {
+      "key": "parallel-50-a",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 2814
+    },
+    {
+      "key": "parallel-50-b",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 2780
+    },
+    {
+      "key": "large-while-two-sse",
+      "mib": 50,
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1466
+    },
+    {
+      "key": "held-sse-a",
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1682
+    },
+    {
+      "key": "held-sse-b",
+      "status": 200,
+      "sseComplete": true,
+      "ms": 1693
+    }
+  ],
+  "observed": [
+    {
+      "key": "stream-before-complete",
+      "bytes": 65600,
+      "valid": true
+    },
+    {
+      "key": "single-20",
+      "bytes": 20971497,
+      "valid": true
+    },
+    {
+      "key": "single-30",
+      "bytes": 31457257,
+      "valid": true
+    },
+    {
+      "key": "single-50",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "mixed-unicode-50",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "parallel-50-a",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "parallel-50-b",
+      "bytes": 52428777,
+      "valid": true
+    },
+    {
+      "key": "held-sse-a",
+      "bytes": 68,
+      "valid": true
+    },
+    {
+      "key": "held-sse-b",
+      "bytes": 68,
+      "valid": true
+    },
+    {
+      "key": "large-while-two-sse",
+      "bytes": 52428777,
+      "valid": true
+    }
+  ],
+  "resourceMetrics": [
+    "siwc_gateway_inflight_requests 0",
+    "siwc_gateway_queued_requests 0",
+    "siwc_gateway_normalizer_active 0",
+    "siwc_gateway_upload_active 0",
+    "siwc_gateway_upload_queued 0",
+    "siwc_gateway_normalizer_queued 0",
+    "siwc_gateway_upstream_uploads_active 0",
+    "siwc_gateway_spool_reserved_bytes 0",
+    "siwc_gateway_spool_directories 0",
+    "siwc_gateway_normalizer_peak_rss_bytes 0",
+    "siwc_gateway_request_normalized_bytes_total 314638451",
+    "siwc_gateway_active_streams 0"
+  ]
+}
