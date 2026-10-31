@@ -77,7 +77,13 @@ dsh plugin --profile <name> add /absolute/path/to/dsh-llm-siwc
 node scripts/login.mjs            # 登录
 node scripts/login.mjs --status   # 查看已存账号
 node scripts/login.mjs --logout   # 撤销并清除
+node scripts/login.mjs --reauth   # 用已签发的 client id 重新授权
 ```
+
+当 refresh token 过期或被撤销（`invalid_grant`、`refresh_token_reused` 等，见官方
+errors-and-recovery）时用 `--reauth`：它复用**同一个**已签发 `client_id` 和
+`ext_agent_host_id` 完成授权，不会注册新 client；`--client-id` 可指定存储中的某个账号。
+经 VM 网关部署时，授权完成后按提示重启 `siwc-gateway` 以加载新凭据。
 
 ### 选择模型
 

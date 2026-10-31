@@ -79,7 +79,14 @@ immediately; confirm with `/chatgpt status` once you finish authorizing.
 node scripts/login.mjs            # sign in
 node scripts/login.mjs --status   # show the stored account
 node scripts/login.mjs --logout   # revoke and clear
+node scripts/login.mjs --reauth   # reauthorize the stored client id
 ```
+
+When the refresh token expired or was revoked (`invalid_grant`, `refresh_token_reused`,
+etc. — see the official errors-and-recovery page), use `--reauth`: it repeats OAuth with
+the **same** issued `client_id` and `ext_agent_host_id` instead of registering a new
+client; `--client-id` selects a specific stored account. On the VM gateway, restart
+`siwc-gateway` afterwards so it loads the new credential.
 
 ### Pick the model
 
